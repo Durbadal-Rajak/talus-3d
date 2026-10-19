@@ -1,0 +1,1518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Talus 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: field-office instrument. A control panel down the left, the 3D model filling the rest;
+   the panel stacks under the model on a phone. Mineral neutrals, hi-vis orange for actions only. */
+:root {
+  --bg: #eceee9; --surface: #f8f9f6; --sunk: #e2e6e0; --ink: #1c2420; --muted: #5a6760; --line: #cdd4cd;
+  --accent: #c2410c; --accent-ink: #ffffff; --view: #dde3dc;
+  --good: #2c7a4b; --warn: #9a6a07; --bad: #b42318; --water: #2f6fb3;
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121815; --surface: #1a221e; --sunk: #232d28; --ink: #e4eae6; --muted: #98a59e; --line: #2f3b35;
+  --accent: #f0803f; --accent-ink: #1a0e05; --view: #0e1311;
+  --good: #5cc287; --warn: #e0b24a; --bad: #f2735f; --water: #6aa8ec; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121815; --surface: #1a221e; --sunk: #232d28; --ink: #e4eae6; --muted: #98a59e; --line: #2f3b35;
+  --accent: #f0803f; --accent-ink: #1a0e05; --view: #0e1311;
+  --good: #5cc287; --warn: #e0b24a; --bad: #f2735f; --water: #6aa8ec; color-scheme: dark }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px; box-sizing: border-box; }
+* { box-sizing: border-box; }
+.app { display: grid; grid-template-rows: auto auto 1fr; gap: 10px; height: 100%; min-height: 0; }
+header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.brand { font: 700 22px/1 var(--f-display); letter-spacing: .02em; display: flex; align-items: baseline; gap: 8px; }
+.brand small { font: 500 12px var(--f-display); color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+.top .proj { flex: 1 1 200px; min-width: 0; }
+.top .proj input { font: 600 16px var(--f-body); border: 1px solid transparent; background: transparent; padding: 4px 6px; border-radius: var(--r); width: 100%; color: var(--ink); }
+.top .proj input:hover, .top .proj input:focus { border-color: var(--line); background: var(--surface); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+button, select, input, textarea { font: inherit; color: inherit; }
+button { border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: var(--r); cursor: pointer; font-weight: 500; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button.primary:hover { filter: brightness(1.06); }
+button.ghost { background: transparent; }
+button.small { padding: 3px 8px; font-size: 13px; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+nav.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+nav.tabs button { border: none; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: 8px 14px; font: 600 14px var(--f-display); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs .step { font-family: var(--f-data); font-size: 11px; margin-right: 6px; color: var(--muted); }
+
+.main { display: grid; grid-template-columns: minmax(330px, 400px) 1fr; gap: 14px; min-height: 0; }
+.panel { overflow: auto; min-height: 0; padding-right: 4px; display: flex; flex-direction: column; gap: 14px; padding-bottom: 20px; }
+.view { position: relative; min-width: 0; min-height: 0; border-radius: var(--r); overflow: hidden; background: var(--view); border: 1px solid var(--line); }
+.view canvas.gl { display: block; width: 100%; height: 100%; }
+
+section.group { display: flex; flex-direction: column; gap: 10px; }
+h2 { font: 600 13px var(--f-display); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0; max-width: 60ch; }
+.hint b { color: var(--ink); font-weight: 600; }
+label.f { display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 8px; font-size: 14px; }
+label.f .u { color: var(--muted); font-size: 12px; font-family: var(--f-data); margin-left: 4px; }
+label.f input, label.f select { width: 100%; }
+input[type=number], input[type=text], select, textarea { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 5px 7px; min-width: 0; }
+input[type=number] { font-family: var(--f-data); font-size: 13px; font-variant-numeric: tabular-nums; }
+textarea { width: 100%; font: 13px/1.5 var(--f-data); resize: vertical; min-height: 110px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; flex-wrap: wrap; }
+.seg label { padding: 5px 10px; cursor: pointer; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+.seg label:has(input:checked) { background: var(--sunk); font-weight: 600; }
+.seg input { accent-color: var(--accent); }
+.item { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.item .head { display: flex; gap: 8px; align-items: center; }
+.item .head input[type=text] { flex: 1; font-weight: 600; }
+input[type=color] { width: 30px; height: 28px; border: 1px solid var(--line); border-radius: var(--r); padding: 1px; background: var(--surface); }
+.grid4 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; align-items: end; font-size: 12px; color: var(--muted); }
+.grid4 input { width: 100%; }
+.err { color: var(--bad); font-size: 13px; }
+.ok { color: var(--good); font-size: 13px; }
+
+.compute { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.bar { height: 6px; background: var(--sunk); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+
+.fsrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.fs { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; background: var(--surface); display: flex; flex-direction: column; gap: 2px; cursor: pointer; text-align: left; }
+.fs[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.fs .m { font: 600 12px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.fs .v { font: 500 30px/1.1 var(--f-data); font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; font: 600 11px var(--f-display); letter-spacing: .07em; text-transform: uppercase; padding: 2px 7px; border-radius: 99px; border: 1px solid currentColor; width: fit-content; }
+.pill.bad { color: var(--bad); } .pill.warn { color: var(--warn); } .pill.good { color: var(--good); }
+dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 0; font-size: 14px; }
+dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; font-family: var(--f-data); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
+.stale { border: 1px dashed var(--warn); color: var(--warn); border-radius: var(--r); padding: 8px 10px; font-size: 14px; }
+canvas.section { width: 100%; height: 230px; display: block; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.tablewrap { overflow: auto; max-height: 300px; border: 1px solid var(--line); border-radius: var(--r); }
+table { border-collapse: collapse; font: 12px var(--f-data); font-variant-numeric: tabular-nums; width: 100%; }
+th, td { padding: 4px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { position: sticky; top: 0; background: var(--sunk); font: 600 11px var(--f-display); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+textarea.out { min-height: 140px; }
+
+.overlay { position: absolute; pointer-events: none; font-size: 13px; }
+.ov-fs { top: 12px; left: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.ov-fs .v { font: 500 26px/1 var(--f-data); }
+.ov-fs .m { font: 600 11px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ov-legend { right: 12px; bottom: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; width: 200px; }
+.ov-legend .ramp { height: 10px; border-radius: 2px; margin: 4px 0; }
+.ov-legend .ends { display: flex; justify-content: space-between; font: 11px var(--f-data); color: var(--muted); }
+.ov-legend .t { font: 600 11px var(--f-display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ov-axes { left: 12px; bottom: 12px; font: 11px var(--f-data); color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 8px; }
+.ov-msg { inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); padding: 20px; text-align: center; }
+.toast { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: var(--r); font-size: 14px; z-index: 20; }
+
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  .app { height: auto; }
+  .main { grid-template-columns: 1fr; }
+  .view { order: -1; height: 58vh; min-height: 320px; }
+  .panel { overflow: visible; padding-right: 0; }
+  .ov-legend { width: 160px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">Talus <small>3D slope stability</small></div>
+    <div class="proj"><input id="projName" type="text" aria-label="Project name"></div>
+    <div class="actions">
+      <select id="exampleSel" aria-label="Load an example">
+        <option value="">Load example…</option>
+        <option value="acads">ACADS 1(a) benchmark slope</option>
+        <option value="pit">Benched pit wall (example)</option>
+      </select>
+      <button type="button" id="openBtn" class="ghost">Open…</button><input id="openFile" type="file" accept=".json,application/json" hidden>
+      <button type="button" id="copyProj" class="ghost">Copy project</button>
+      <button type="button" id="saveFile" class="ghost" hidden>Save file</button>
+      <button type="button" id="computeTop" class="primary">Compute</button>
+    </div>
+  </header>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+  <div class="main">
+    <aside class="panel" id="panel"></aside>
+    <div class="view" id="view">
+      <canvas class="gl" id="gl"></canvas>
+      <div class="overlay ov-fs" id="ovFs" hidden></div>
+      <div class="overlay ov-legend" id="ovLegend" hidden></div>
+      <div class="overlay ov-axes" id="ovAxes">x east · y north · z up · metres</div>
+      <div class="overlay ov-msg" id="ovMsg" hidden></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"></script>
+<script id="solverSrc">
+/* Talus solver: 3D limit-equilibrium slope stability by the column method.
+ *
+ * Methods: Bishop simplified 3D and Janbu simplified 3D (uncorrected), with a
+ * single sliding direction for the whole mass solved from the secondary
+ * equilibrium equation (after Hungr 1987; Huang, Tsai & Chen 2002;
+ * Cheng & Yip 2007).
+ * Units: kN, m, kPa, kN/m3. Coordinates: x, y horizontal, z up.
+ *
+ * Runs in a Web Worker (self.onmessage) and in Node (module.exports).
+ */
+(function (root) {
+  'use strict';
+  const DEG = Math.PI / 180;
+  const MALPHA_MIN = 0.1;
+
+  function rng(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------------------------------------------------------- surfaces */
+
+  // Upper envelope of a polyline or closed polygon given as [[u, z], ...].
+  function profileFn(points, axis) {
+    const segs = [];
+    let umin = Infinity, umax = -Infinity;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p = points[i], q = points[i + 1];
+      umin = Math.min(umin, p[0], q[0]); umax = Math.max(umax, p[0], q[0]);
+      if (Math.abs(q[0] - p[0]) < 1e-9) continue;
+      const lo = Math.min(p[0], q[0]), hi = Math.max(p[0], q[0]);
+      segs.push([lo, hi, p[0], p[1], (q[1] - p[1]) / (q[0] - p[0])]);
+    }
+    if (!segs.length) throw new Error('Profile needs at least two points with different positions');
+    return function (x, y) {
+      let u = axis === 'x' ? x : y;
+      if (u < umin) u = umin; else if (u > umax) u = umax;
+      let best = -Infinity;
+      for (let k = 0; k < segs.length; k++) {
+        const s = segs[k];
+        if (u >= s[0] - 1e-9 && u <= s[1] + 1e-9) {
+          const z = s[3] + (u - s[2]) * s[4];
+          if (z > best) best = z;
+        }
+      }
+      return best;
+    };
+  }
+
+  function rasterFn(r) {
+    const nx = r.nx, ny = r.ny, z = r.z;
+    const dx = (r.x1 - r.x0) / (nx - 1), dy = (r.y1 - r.y0) / (ny - 1);
+    return function (x, y) {
+      let fx = (x - r.x0) / dx, fy = (y - r.y0) / dy;
+      if (fx < 0) fx = 0; else if (fx > nx - 1) fx = nx - 1;
+      if (fy < 0) fy = 0; else if (fy > ny - 1) fy = ny - 1;
+      let i = Math.floor(fx), j = Math.floor(fy);
+      if (i > nx - 2) i = nx - 2; if (j > ny - 2) j = ny - 2;
+      const tx = fx - i, ty = fy - j;
+      const a = z[j * nx + i], b = z[j * nx + i + 1], c = z[(j + 1) * nx + i], d = z[(j + 1) * nx + i + 1];
+      return a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty;
+    };
+  }
+
+  // Rasterise a triangulation (pts [[x,y,z]], tris flat index array) onto a grid.
+  function rasterFromTIN(pts, tris, ext, nx, ny) {
+    const z = new Float64Array(nx * ny).fill(NaN);
+    const dx = (ext.x1 - ext.x0) / (nx - 1), dy = (ext.y1 - ext.y0) / (ny - 1);
+    for (let t = 0; t < tris.length; t += 3) {
+      const A = pts[tris[t]], B = pts[tris[t + 1]], C = pts[tris[t + 2]];
+      const det = (B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]);
+      if (Math.abs(det) < 1e-12) continue;
+      const i0 = Math.max(0, Math.floor((Math.min(A[0], B[0], C[0]) - ext.x0) / dx));
+      const i1 = Math.min(nx - 1, Math.ceil((Math.max(A[0], B[0], C[0]) - ext.x0) / dx));
+      const j0 = Math.max(0, Math.floor((Math.min(A[1], B[1], C[1]) - ext.y0) / dy));
+      const j1 = Math.min(ny - 1, Math.ceil((Math.max(A[1], B[1], C[1]) - ext.y0) / dy));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const x = ext.x0 + i * dx, y = ext.y0 + j * dy;
+        const l1 = ((B[1] - C[1]) * (x - C[0]) + (C[0] - B[0]) * (y - C[1])) / det;
+        const l2 = ((C[1] - A[1]) * (x - C[0]) + (A[0] - C[0]) * (y - C[1])) / det;
+        const l3 = 1 - l1 - l2;
+        if (l1 >= -1e-9 && l2 >= -1e-9 && l3 >= -1e-9) z[j * nx + i] = l1 * A[2] + l2 * B[2] + l3 * C[2];
+      }
+    }
+    // fill cells outside the hull from their nearest filled neighbours
+    let missing = true, guard = 0;
+    while (missing && guard++ < nx + ny) {
+      missing = false;
+      const nz = z.slice();
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        const k = j * nx + i;
+        if (!isNaN(z[k])) continue;
+        let s = 0, n = 0;
+        if (i > 0 && !isNaN(z[k - 1])) { s += z[k - 1]; n++; }
+        if (i < nx - 1 && !isNaN(z[k + 1])) { s += z[k + 1]; n++; }
+        if (j > 0 && !isNaN(z[k - nx])) { s += z[k - nx]; n++; }
+        if (j < ny - 1 && !isNaN(z[k + nx])) { s += z[k + nx]; n++; }
+        if (n) nz[k] = s / n; else missing = true;
+      }
+      z.set(nz);
+    }
+    for (let k = 0; k < z.length; k++) if (isNaN(z[k])) z[k] = 0;
+    return { kind: 'raster', x0: ext.x0, x1: ext.x1, y0: ext.y0, y1: ext.y1, nx, ny, z: Array.from(z) };
+  }
+
+  function surfaceFn(s) {
+    if (!s) return null;
+    if (s.kind === 'profile') return profileFn(s.points, s.axis || 'y');
+    if (s.kind === 'raster') return rasterFn(s);
+    if (s.kind === 'plane') { const z = +s.z; return () => z; }
+    throw new Error('Unknown surface kind: ' + s.kind + (s.kind === 'points' ? ' (points must be rastered first)' : ''));
+  }
+
+  /* ---------------------------------------------------------- materials */
+
+  function hoekBrownTable(m) {
+    const D = m.D || 0, gsi = m.gsi, mi = m.mi, sci = m.sigci;
+    const mb = mi * Math.exp((gsi - 100) / (28 - 14 * D));
+    const s = Math.exp((gsi - 100) / (9 - 3 * D));
+    const a = 0.5 + (Math.exp(-gsi / 15) - Math.exp(-20 / 3)) / 6;
+    const s3t = -s * sci / mb;
+    const N = 800, span = Math.max(sci, 50000);
+    const sn = new Float64Array(N), tau = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      const s3 = s3t + span * Math.pow((i + 1) / N, 3);
+      const ratio = mb * s3 / sci + s;
+      const s1 = s3 + sci * Math.pow(ratio, a);
+      const k = 1 + a * mb * Math.pow(ratio, a - 1);
+      sn[i] = s3 + (s1 - s3) / (k + 1);
+      tau[i] = (s1 - s3) * Math.sqrt(k) / (k + 1);
+    }
+    return { sn, tau, mb, s, a };
+  }
+
+  function prepMaterial(m) {
+    const out = {
+      id: m.id, name: m.name, model: m.model || 'mc',
+      gamma: +m.gamma, gammaSat: m.gammaSat != null && m.gammaSat !== '' ? +m.gammaSat : +m.gamma,
+      water: m.water || 'wt', ru: +(m.ru || 0),
+      c: +(m.c || 0), tphi: Math.tan(+(m.phi || 0) * DEG), su: +(m.su || 0),
+    };
+    if (out.model === 'hb') out.hb = hoekBrownTable({ gsi: +m.gsi, mi: +m.mi, D: +(m.D || 0), sigci: +m.sigci });
+    return out;
+  }
+
+  // Tangent strength at effective normal stress sn: writes [c, tanphi] into out.
+  function strength(mat, sn, out) {
+    if (mat.model === 'su') { out[0] = mat.su; out[1] = 0; return; }
+    if (mat.model === 'hb') {
+      const T = mat.hb, S = T.sn, U = T.tau, n = S.length;
+      if (sn <= S[0]) { const t = (U[1] - U[0]) / (S[1] - S[0]); out[1] = t; out[0] = Math.max(0, U[0] - S[0] * t); return; }
+      let lo = 0, hi = n - 1;
+      if (sn >= S[hi]) lo = hi - 1;
+      else while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (S[mid] > sn) hi = mid; else lo = mid; }
+      const t = (U[lo + 1] - U[lo]) / (S[lo + 1] - S[lo]);
+      const tau = U[lo] + (sn - S[lo]) * t;
+      out[1] = t; out[0] = tau - sn * t; return;
+    }
+    out[0] = mat.c; out[1] = mat.tphi;
+  }
+
+  /* ---------------------------------------------------------- model */
+
+  function prepare(P) {
+    const ext = P.extent;
+    const matIndex = {};
+    const mats = (P.materials || []).map((m, i) => { matIndex[m.id] = i; return prepMaterial(m); });
+    if (!mats.length) throw new Error('Define at least one material');
+    const G = surfaceFn(P.ground);
+    const layers = [];
+    let prev = G;
+    for (const L of P.layers || []) {
+      const f = surfaceFn(L.surface), p = prev;
+      const g = (x, y) => Math.min(f(x, y), p(x, y));
+      if (!(L.material in matIndex)) throw new Error('Layer uses an unknown material');
+      layers.push({ at: g, mat: matIndex[L.material] });
+      prev = g;
+    }
+    const gm = P.groundMaterial in matIndex ? matIndex[P.groundMaterial] : 0;
+    const zonesMat = [gm].concat(layers.map(l => l.mat));
+    const loads = (P.loads || []).map(l => ({ x0: Math.min(l.x0, l.x1), x1: Math.max(l.x0, l.x1), y0: Math.min(l.y0, l.y1), y1: Math.max(l.y0, l.y1), q: +l.q }));
+    return {
+      ext, G, layers, zonesMat, mats,
+      W: P.water ? surfaceFn(P.water) : null,
+      gw: P.gammaW != null ? +P.gammaW : 9.81,
+      loads, kh: +((P.seismic && P.seismic.kh) || 0), kv: +((P.seismic && P.seismic.kv) || 0),
+    };
+  }
+
+  // Downhill azimuth (radians) of the ground inside a plan box.
+  function autoAzimuth(M, box) {
+    let gx = 0, gy = 0;
+    const n = 24, hx = (box.x1 - box.x0) / n, hy = (box.y1 - box.y0) / n;
+    for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) {
+      const x = box.x0 + i * hx, y = box.y0 + j * hy;
+      const ex = Math.max(hx, 1e-3) * 0.5, ey = Math.max(hy, 1e-3) * 0.5;
+      gx += (M.G(x + ex, y) - M.G(x - ex, y)) / (2 * ex);
+      gy += (M.G(x, y + ey) - M.G(x, y - ey)) / (2 * ey);
+    }
+    if (Math.abs(gx) + Math.abs(gy) < 1e-9) return -Math.PI / 2;
+    return Math.atan2(-gy, -gx);
+  }
+
+  /* ---------------------------------------------------------- trial surface */
+
+  // Map a unit-cube vector q (6 values) to an ellipsoid / sphere / cylinder.
+  function buildSurface(M, cfg, q) {
+    const L = cfg.box;
+    const cx = (L.x0 + L.x1) / 2, cy = (L.y0 + L.y1) / 2;
+    const Lmax = 0.5 * Math.hypot(L.x1 - L.x0, L.y1 - L.y0);
+    const cyl = cfg.type === 'cylinder';
+    const th = cfg.theta0 + (cyl ? 0 : (q[4] - 0.5) * 2 * cfg.thetaRange);
+    const dx = Math.cos(th), dy = Math.sin(th);
+    const t = cyl ? 0 : (q[3] - 0.5) * 2 * Lmax;
+    const px = cx - t * dy, py = cy + t * dx;
+    const s1 = (q[0] - 0.5) * 2 * Lmax, s2 = (q[1] - 0.5) * 2 * Lmax;
+    if (Math.abs(s1 - s2) < 0.02 * Lmax) return null;
+    const e1x = px + s1 * dx, e1y = py + s1 * dy, e2x = px + s2 * dx, e2y = py + s2 * dy;
+    const inBox = (x, y) => x >= L.x0 - 1e-6 && x <= L.x1 + 1e-6 && y >= L.y0 - 1e-6 && y <= L.y1 + 1e-6;
+    if (!inBox(e1x, e1y) || !inBox(e2x, e2y)) return null;
+    // section is an ellipse with vertical/horizontal aspect kappa: scale z, fit a circle
+    const kappa = cfg.type === 'ellipsoid' ? 0.5 * Math.pow(4, q[6] == null ? 0.5 : q[6]) : 1;
+    const z1 = M.G(e1x, e1y) / kappa, z2 = M.G(e2x, e2y) / kappa;
+    const ds = s2 - s1, dz = z2 - z1, len = Math.hypot(ds, dz);
+    const beta = 0.06 + q[2] * 1.46;
+    const R = len / 2 / Math.sin(beta), h = R * Math.cos(beta);
+    let nx = -dz / len, nz = ds / len;
+    if (nz < 0) { nx = -nx; nz = -nz; }
+    const sc = (s1 + s2) / 2 + h * nx, zc = ((z1 + z2) / 2 + h * nz) * kappa;
+    const a = cfg.type === 'sphere' ? R : cyl ? Infinity : R * (0.25 + q[5] * 2.75);
+    return { C: [px + sc * dx, py + sc * dy, zc], R, Rw: R * kappa, a, theta: th, cyl };
+  }
+
+  /* ---------------------------------------------------------- columns */
+
+  function makeColumns(M, S, ncol, box) {
+    const { C, R, a, theta, cyl } = S;
+    const Rw = S.Rw || R;
+    const dx = Math.cos(theta), dy = Math.sin(theta);
+    let du = (cyl ? 2 * R : 2 * Math.min(R, a)) / ncol;
+    const nu0 = Math.ceil(2 * R / du);
+    let vmin, vmax;
+    if (cyl) {
+      const ext = M.ext, vs = [];
+      for (const x of [ext.x0, ext.x1]) for (const y of [ext.y0, ext.y1]) vs.push(-(x - C[0]) * dy + (y - C[1]) * dx);
+      vmin = Math.min(...vs); vmax = Math.max(...vs);
+    } else { vmin = -a; vmax = a; }
+    let nv = Math.max(1, Math.round((vmax - vmin) / du));
+    const MAXC = cyl ? 4000 : 9000;
+    let nu = nu0;
+    if (nu * nv > MAXC) { const f = Math.sqrt(nu * nv / MAXC); nu = Math.max(8, Math.floor(nu / f)); nv = Math.max(1, Math.floor(nv / f)); }
+    du = 2 * R / nu;
+    const dv = (vmax - vmin) / nv;
+    const Ah = du * dv;
+    const rimQ = cyl ? 0 : 2.2 * Math.max(du / R, dv / a);
+    const ext = M.ext, nz = M.layers.length;
+    const cols = [];
+    const hs = new Float64Array(nz + 2);
+    let touchedRim = false, outside = false;
+    for (let i = 0; i < nu; i++) {
+      const u = -R + (i + 0.5) * du;
+      for (let j = 0; j < nv; j++) {
+        const v = vmin + (j + 0.5) * dv;
+        const Q = 1 - (u / R) * (u / R) - (cyl ? 0 : (v / a) * (v / a));
+        if (Q <= 0) continue;
+        const x = C[0] + u * dx - v * dy, y = C[1] + u * dy + v * dx;
+        const sq = Math.sqrt(Q), zb = C[2] - Rw * sq;
+        const zt = M.G(x, y);
+        if (zb >= zt - 1e-6) continue;
+        if (x < ext.x0 - 1e-6 || x > ext.x1 + 1e-6 || y < ext.y0 - 1e-6 || y > ext.y1 + 1e-6) { outside = true; continue; }
+        if (box && (x < box.x0 - 1e-6 || x > box.x1 + 1e-6 || y < box.y0 - 1e-6 || y > box.y1 + 1e-6)) { outside = true; continue; }
+        if (Q < rimQ) touchedRim = true;
+        const gu = Rw * u / (R * R * sq), gv = cyl ? 0 : Rw * v / (a * a * sq);
+        const zx = gu * dx - gv * dy, zy = gu * dy + gv * dx;
+        // layer heights at this column
+        hs[0] = zt;
+        for (let k = 0; k < nz; k++) hs[k + 1] = M.layers[k].at(x, y);
+        hs[nz + 1] = -Infinity;
+        const wl = M.W ? M.W(x, y) : -Infinity;
+        let W = 0, baseMat = M.zonesMat[nz];
+        for (let k = 0; k <= nz; k++) {
+          const top = Math.min(hs[k], zt), bot = Math.max(hs[k + 1], zb);
+          if (zb >= hs[k + 1] && zb < hs[k] + 1e-9) baseMat = M.zonesMat[k];
+          if (top <= bot) continue;
+          const mat = M.mats[M.zonesMat[k]];
+          const dry = Math.max(0, top - Math.max(bot, wl)), wet = (top - bot) - dry;
+          W += (mat.gamma * dry + mat.gammaSat * wet) * Ah;
+        }
+        const mat = M.mats[baseMat];
+        let up = 0;
+        if (mat.water === 'wt' && M.W) up = M.gw * Math.max(0, wl - zb);
+        else if (mat.water === 'ru') up = mat.ru * W / Ah;
+        let q = 0;
+        for (const l of M.loads) if (x >= l.x0 && x <= l.x1 && y >= l.y0 && y <= l.y1) q += l.q;
+        if (M.W && wl > zt) q += M.gw * (wl - zt);   // ponded water as a vertical load
+        cols.push({ x, y, zb, zt, zx, zy, Ah, W, Q: q * Ah, mat: baseMat, u: up });
+      }
+    }
+    if (outside) return { error: 'outside' };
+    if (touchedRim) return { error: 'rim' };
+    if (cols.length < 12) return { error: 'small' };
+    return { cols, du, dv, nu, nv };
+  }
+
+  /* ---------------------------------------------------------- equilibrium */
+
+  const tmp = [0, 0];
+
+  // Factor of safety for a given sliding azimuth alpha. Returns {F, res} or null.
+  function factor(M, cols, O, alpha, method, F0, keep) {
+    const dx = Math.cos(alpha), dy = Math.sin(alpha);
+    const n = cols.length, kh = M.kh, kv = M.kv;
+    const sn = keep && keep.sn ? keep.sn : new Float64Array(n);
+    if (!(keep && keep.sn)) for (let i = 0; i < n; i++) {
+      const c = cols[i];
+      sn[i] = Math.max(0, (c.W * (1 + kv) + c.Q) / c.Ah - c.u);
+    }
+    // p·(r×F) and d·(r×F) with p = (-dy, dx, 0), d = (dx, dy, 0)
+    const pm = (Fx, Fy, Fz, Rx, Ry, Rz) => -dy * (Ry * Fz - Rz * Fy) + dx * (Rz * Fx - Rx * Fz);
+    const dm = (Fx, Fy, Fz, Rx, Ry, Rz) => dx * (Ry * Fz - Rz * Fy) + dy * (Rz * Fx - Rx * Fz);
+    let F = F0 || 1, res = 0, ok = true;
+    for (let it = 0; it < 120; it++) {
+      let num = 0, den = 0, r2a = 0, r2b = 0, r2c = 0, scale = 0;
+      for (let i = 0; i < n; i++) {
+        const c = cols[i];
+        const m = Math.sqrt(1 + c.zx * c.zx + c.zy * c.zy);
+        const nx = -c.zx / m, ny = -c.zy / m, nzz = 1 / m;
+        const A = c.Ah * m;
+        const szr = c.zx * dx + c.zy * dy, sl = Math.sqrt(1 + szr * szr);
+        const sx = dx / sl, sy = dy / sl, sz = szr / sl;
+        strength(M.mats[c.mat], sn[i], tmp);
+        const ci = tmp[0], ti = tmp[1];
+        const Wv = c.W * (1 + kv) + c.Q;
+        const ma = nzz - sz * ti / F;
+        if (ma < MALPHA_MIN) { ok = false; break; }
+        let N = (Wv + sz * (ci * A - c.u * A * ti) / F) / ma;
+        let Ne = N - c.u * A;
+        if (Ne < 0) { Ne = 0; N = c.u * A; }
+        const S = ci * A + Ne * ti;
+        sn[i] = Ne / A;
+        const H = kh * c.W;
+        if (method === 'bishop') {
+          // moments about axis p = (-dy, dx, 0) through O (main) and d (secondary)
+          const rx = c.x - O[0], ry = c.y - O[1], rz = c.zb - O[2];
+          const gz = 0.5 * (c.zb + c.zt) - O[2];
+          const ms = pm(sx, sy, sz, rx, ry, rz), mn = pm(nx, ny, nzz, rx, ry, rz);
+          const mw = pm(H * dx, H * dy, -Wv, rx, ry, gz);
+          num += ms * S; den += mn * N + mw;
+          r2a += dm(nx, ny, nzz, rx, ry, rz) * N; r2b += dm(sx, sy, sz, rx, ry, rz) * S; r2c += dm(H * dx, H * dy, -Wv, rx, ry, gz);
+          scale += Math.abs(mw);
+        } else {
+          num += S * (sx * dx + sy * dy);
+          den += N * (nx * dx + ny * dy) + H;
+          r2a += N * (-nx * dy + ny * dx);
+          scale += Wv;
+        }
+      }
+      if (!ok || !(Math.abs(den) > 1e-12)) return null;
+      const Fn = num / den;
+      if (!(Fn > 0) || !isFinite(Fn)) return null;
+      res = method === 'bishop' ? (r2a - r2b / Fn + r2c) / scale : r2a / scale;
+      const conv = Math.abs(Fn - F) < 1e-6 * Fn;
+      F = Fn;
+      if (conv) { if (keep) keep.sn = sn; return { F, res }; }
+    }
+    return null;
+  }
+
+  // Solve the common sliding direction (secondary equilibrium) by secant.
+  function solveDirection(M, cols, O, a0, method, maxIt) {
+    let A = a0, r = factor(M, cols, O, A, method, 1);
+    if (!r) return null;
+    let best = { F: r.F, alpha: A, res: r.res };
+    if (Math.abs(r.res) < 1e-6) return best;
+    let A1 = a0 + 3 * DEG, r1 = factor(M, cols, O, A1, method, r.F);
+    for (let it = 0; it < maxIt && r1; it++) {
+      if (Math.abs(r1.res) < Math.abs(best.res)) best = { F: r1.F, alpha: A1, res: r1.res };
+      if (Math.abs(r1.res) < 1e-5) break;
+      const slope = (r1.res - r.res) / (A1 - A);
+      if (!isFinite(slope) || Math.abs(slope) < 1e-12) break;
+      let A2 = A1 - r1.res / slope;
+      const lim = 60 * DEG;
+      if (A2 > a0 + lim) A2 = a0 + lim; if (A2 < a0 - lim) A2 = a0 - lim;
+      A = A1; r = r1; A1 = A2; r1 = factor(M, cols, O, A1, method, r.F);
+    }
+    if (r1 && Math.abs(r1.res) < Math.abs(best.res)) best = { F: r1.F, alpha: A1, res: r1.res };
+    return best;
+  }
+
+  function evalSurface(M, S, ncol, methods, box, dirIt) {
+    const mc = makeColumns(M, S, ncol, box);
+    if (mc.error) return { error: mc.error };
+    const cols = mc.cols;
+    // pick the downhill sense of the section direction
+    let drive = 0;
+    const dx = Math.cos(S.theta), dy = Math.sin(S.theta);
+    for (const c of cols) drive += -(c.zx * dx + c.zy * dy) * c.W;
+    const a0 = drive >= 0 ? S.theta : S.theta + Math.PI;
+    const fs = {};
+    for (const m of methods) {
+      const r = S.cyl ? factor(M, cols, S.C, a0, m, 1) : solveDirection(M, cols, S.C, a0, m, dirIt == null ? 8 : dirIt);
+      if (!r) return { error: 'nonconv' };
+      fs[m] = { F: r.F, alpha: r.alpha != null ? r.alpha : a0, res: r.res };
+    }
+    return { fs, cols, a0, mc };
+  }
+
+  // Full per-column results for display.
+  function columnDetail(M, cols, O, alpha, method, F) {
+    const dx = Math.cos(alpha), dy = Math.sin(alpha);
+    const keep = {};
+    const r = factor(M, cols, O, alpha, method, F, keep);
+    const out = [];
+    for (let i = 0; i < cols.length; i++) {
+      const c = cols[i];
+      const m = Math.sqrt(1 + c.zx * c.zx + c.zy * c.zy), A = c.Ah * m;
+      const szr = c.zx * dx + c.zy * dy, sz = szr / Math.sqrt(1 + szr * szr);
+      strength(M.mats[c.mat], keep.sn[i], tmp);
+      const sne = keep.sn[i], tauf = tmp[0] + sne * tmp[1];
+      out.push({
+        x: c.x, y: c.y, zb: c.zb, zt: c.zt, weight: c.W, mat: c.mat, u: c.u,
+        sigma: sne + c.u, sigmaEff: sne, strength: tauf, tau: tauf / r.F,
+        dip: Math.atan(Math.sqrt(c.zx * c.zx + c.zy * c.zy)) / DEG,
+        dipdir: ((Math.atan2(-c.zx, -c.zy) / DEG) + 360) % 360,
+        malpha: 1 / m - sz * tmp[1] / r.F, area: A,
+      });
+    }
+    return { F: r.F, cols: out };
+  }
+
+  /* ---------------------------------------------------------- search */
+
+  function searchConfig(M, P) {
+    const s = P.search || {};
+    const box = s.limits ? {
+      x0: Math.max(M.ext.x0, Math.min(s.limits.x0, s.limits.x1)), x1: Math.min(M.ext.x1, Math.max(s.limits.x0, s.limits.x1)),
+      y0: Math.max(M.ext.y0, Math.min(s.limits.y0, s.limits.y1)), y1: Math.min(M.ext.y1, Math.max(s.limits.y0, s.limits.y1)),
+    } : { x0: M.ext.x0, x1: M.ext.x1, y0: M.ext.y0, y1: M.ext.y1 };
+    let theta0 = s.azimuth != null && s.azimuth !== '' ? (90 - +s.azimuth) * DEG : autoAzimuth(M, box);
+    const type = s.type || 'ellipsoid';
+    if (type === 'cylinder') {
+      // a 2D-equivalent section: slide along the profile axis
+      const ax = (P.ground && P.ground.axis) || 'y';
+      theta0 = ax === 'y' ? (Math.sin(theta0) >= 0 ? Math.PI / 2 : -Math.PI / 2) : (Math.cos(theta0) >= 0 ? 0 : Math.PI);
+    }
+    return {
+      box, theta0, type,
+      thetaRange: (s.azimuthRange != null ? +s.azimuthRange : 30) * DEG,
+      limits: s.limits ? box : null,
+      methods: (s.methods && s.methods.length ? s.methods : ['bishop', 'janbu']),
+      particles: +(s.particles || 50), iterations: +(s.iterations || 60),
+      ncolSearch: +(s.columnsSearch || 30), ncol: +(s.columns || 50),
+      refine: s.refine !== false, seed: +(s.seed || 1),
+    };
+  }
+
+  function nelderMead(f, x0, step, maxEval) {
+    const D = x0.length;
+    const clamp = v => v.map(z => Math.min(1, Math.max(0, z)));
+    let simplex = [clamp(x0)];
+    for (let i = 0; i < D; i++) { const x = x0.slice(); x[i] += (x[i] > 0.5 ? -step : step); simplex.push(clamp(x)); }
+    let vals = simplex.map(f), evals = D + 1;
+    while (evals < maxEval) {
+      const idx = vals.map((v, i) => i).sort((a, b) => vals[a] - vals[b]);
+      simplex = idx.map(i => simplex[i]); vals = idx.map(i => vals[i]);
+      if (Math.abs(vals[D] - vals[0]) < 1e-5 && isFinite(vals[D])) break;
+      const cen = new Array(D).fill(0);
+      for (let i = 0; i < D; i++) for (let k = 0; k < D; k++) cen[k] += simplex[i][k] / D;
+      const pt = t => clamp(cen.map((c, k) => c + t * (simplex[D][k] - c)));
+      const xr = pt(-1), fr = f(xr); evals++;
+      if (fr < vals[0]) { const xe = pt(-2), fe = f(xe); evals++; if (fe < fr) { simplex[D] = xe; vals[D] = fe; } else { simplex[D] = xr; vals[D] = fr; } }
+      else if (fr < vals[D - 1]) { simplex[D] = xr; vals[D] = fr; }
+      else {
+        const xc = pt(0.5), fc = f(xc); evals++;
+        if (fc < vals[D]) { simplex[D] = xc; vals[D] = fc; }
+        else { for (let i = 1; i <= D; i++) { simplex[i] = clamp(simplex[i].map((z, k) => simplex[0][k] + 0.5 * (z - simplex[0][k]))); vals[i] = f(simplex[i]); evals++; } }
+      }
+    }
+    let b = 0; for (let i = 1; i < vals.length; i++) if (vals[i] < vals[b]) b = i;
+    return { x: simplex[b], f: vals[b] };
+  }
+
+  function run(P, onProgress) {
+    const M = prepare(P);
+    const cfg = searchConfig(M, P);
+    const R = rng(cfg.seed);
+    const D = 7, methods = cfg.methods, primary = methods[0];
+    const best = {}; for (const m of methods) best[m] = { F: Infinity, q: null };
+    const tried = []; let nEval = 0, nValid = 0;
+    const fail = {};
+    function evalQ(q, ncol) {
+      nEval++;
+      const S = buildSurface(M, cfg, q);
+      if (!S) { fail.geometry = (fail.geometry || 0) + 1; return null; }
+      const r = evalSurface(M, S, ncol, methods, cfg.limits, 6);
+      if (r.error) { fail[r.error] = (fail[r.error] || 0) + 1; return null; }
+      nValid++;
+      for (const m of methods) if (r.fs[m].F < best[m].F) best[m] = { F: r.fs[m].F, q: q.slice() };
+      if (tried.length < 4000) tried.push({ q: q.slice(), F: r.fs[primary].F });
+      return r;
+    }
+    const obj = (m, ncol) => q => { const r = evalQ(q, ncol); return r ? r.fs[m].F : 1e9; };
+
+    // particle swarm on the primary method
+    const np = cfg.particles, X = [], V = [], PB = [], PF = [];
+    let gb = null, gf = Infinity;
+    for (let p = 0; p < np; p++) {
+      let q, f = 1e9;
+      for (let k = 0; k < 60 && f >= 1e9; k++) { q = Array.from({ length: D }, R); f = obj(primary, cfg.ncolSearch)(q); }
+      X.push(q); V.push(Array.from({ length: D }, () => (R() - 0.5) * 0.2)); PB.push(q.slice()); PF.push(f);
+      if (f < gf) { gf = f; gb = q.slice(); }
+    }
+    if (onProgress) onProgress({ frac: 0.05, best: gf });
+    for (let it = 0; it < cfg.iterations; it++) {
+      const w = 0.9 - 0.5 * it / cfg.iterations;
+      for (let p = 0; p < np; p++) {
+        for (let k = 0; k < D; k++) {
+          V[p][k] = w * V[p][k] + 1.49 * R() * (PB[p][k] - X[p][k]) + 1.49 * R() * ((gb ? gb[k] : 0.5) - X[p][k]);
+          V[p][k] = Math.max(-0.25, Math.min(0.25, V[p][k]));
+          X[p][k] = Math.min(1, Math.max(0, X[p][k] + V[p][k]));
+        }
+        const f = obj(primary, cfg.ncolSearch)(X[p]);
+        if (f < PF[p]) { PF[p] = f; PB[p] = X[p].slice(); if (f < gf) { gf = f; gb = X[p].slice(); } }
+      }
+      if (onProgress) onProgress({ frac: 0.05 + 0.75 * (it + 1) / cfg.iterations, best: gf, evals: nEval, valid: nValid });
+    }
+    if (!best[primary].q) throw new Error('No valid slip surface found. Check the geometry, the search limits and the search direction.');
+
+    // local refinement of each method's critical surface
+    if (cfg.refine) for (let mi = 0; mi < methods.length; mi++) {
+      const m = methods[mi];
+      if (!best[m].q) continue;
+      nelderMead(obj(m, cfg.ncolSearch), best[m].q, 0.05, 300);
+      nelderMead(obj(m, cfg.ncolSearch), best[m].q, 0.015, 200);
+      if (onProgress) onProgress({ frac: 0.8 + 0.15 * (mi + 1) / methods.length, best: best[primary].F, evals: nEval, valid: nValid });
+    }
+
+    // final evaluation at full column resolution
+    const results = {};
+    for (const m of methods) {
+      if (!best[m].q) continue;
+      const S = buildSurface(M, cfg, best[m].q);
+      const r = evalSurface(M, S, cfg.ncol, methods, cfg.limits, 12);
+      const use = r.error ? evalSurface(M, S, cfg.ncolSearch, methods, cfg.limits, 12) : r;
+      if (use.error) continue;
+      const det = columnDetail(M, use.cols, S.C, use.fs[m].alpha, m, use.fs[m].F);
+      results[m] = {
+        F: use.fs[m].F, alpha: use.fs[m].alpha, allFS: mapFS(use.fs), surface: S,
+        columns: det.cols, du: use.mc.du, dv: use.mc.dv, volume: det.cols.reduce((s, c) => s + (c.zt - c.zb) * use.mc.du * use.mc.dv, 0),
+      };
+    }
+    tried.sort((a, b) => a.F - b.F);
+    const top = tried.slice(0, 40).map(t => ({ F: t.F, surface: buildSurface(M, cfg, t.q) }));
+    if (onProgress) onProgress({ frac: 1, best: best[primary].F });
+    return { methods, primary, results, top, stats: { evaluated: nEval, valid: nValid, rejected: fail }, cfg: { theta0: cfg.theta0, type: cfg.type, box: cfg.box } };
+  }
+
+  function mapFS(fs) { const o = {}; for (const k in fs) o[k] = fs[k].F; return o; }
+
+  // Evaluate one explicitly defined surface (used by tests and the "check surface" tool).
+  function evalExplicit(P, S, opts) {
+    opts = opts || {};
+    const M = prepare(P);
+    const methods = opts.methods || ['bishop', 'janbu'];
+    const r = evalSurface(M, S, opts.columns || 50, methods, null, 15);
+    if (r.error) return { error: r.error };
+    const out = {};
+    for (const m of methods) out[m] = r.fs[m];
+    out.columns = r.cols.length;
+    return out;
+  }
+
+  const api = { run, evalExplicit, prepare, buildSurface, makeColumns, rasterFromTIN, profileFn, hoekBrownTable, strength, prepMaterial, version: '1.0.0' };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.TalusSolver = api;
+
+  if (typeof self !== 'undefined' && typeof window === 'undefined' && typeof self.postMessage === 'function') {
+    self.onmessage = function (ev) {
+      const msg = ev.data;
+      if (msg.cmd !== 'run') return;
+      try {
+        let last = 0;
+        const res = run(msg.project, p => {
+          const now = Date.now();
+          if (now - last > 120 || p.frac >= 1) { last = now; self.postMessage({ type: 'progress', p }); }
+        });
+        self.postMessage({ type: 'done', result: res });
+      } catch (e) {
+        self.postMessage({ type: 'error', message: e.message || String(e) });
+      }
+    };
+  }
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+<script>
+(function () {
+'use strict';
+const S = window.TalusSolver;
+const $ = id => document.getElementById(id);
+const DEG = Math.PI / 180;
+const fmt = (v, d = 2) => (v == null || !isFinite(v)) ? '–' : (+v).toFixed(d);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const uid = () => Math.random().toString(36).slice(2, 8);
+
+/* ------------------------------------------------------------- examples */
+const EXAMPLES = {
+  acads: () => ({
+    name: 'ACADS 1(a) benchmark, 50 m extrusion', mode: 'extruded', width: 50,
+    profileText: '20 25\n30 25\n50 35\n70 35', terrain: null,
+    materials: [{ id: 'm1', name: 'Homogeneous soil', color: '#b9a37a', model: 'mc', gamma: 20, gammaSat: 20, c: 3, phi: 19.6, su: 50, gsi: 50, mi: 10, D: 0, sigci: 30000, water: 'wt', ru: 0 }],
+    groundMaterial: 'm1', layers: [],
+    water: { kind: 'none', z: 25, text: '' }, gammaW: 9.81, loads: [], seismic: { kh: 0, kv: 0 },
+    search: { type: 'sphere', methods: ['bishop', 'janbu'], azimuthMode: 'auto', azimuth: 180, azimuthRange: 30, limitsOn: false, limits: { x0: 0, x1: 50, y0: 20, y1: 70 }, particles: 50, iterations: 60, columns: 50, seed: 1 },
+    note: 'Giam & Donald (1989) ACADS 1(a). Published 2D Bishop 0.987, referee 1.00; published 3D sphere Bishop 1.045.',
+  }),
+  pit: () => ({
+    name: 'Benched pit wall (example data)', mode: 'extruded', width: 150,
+    profileText: '0 0\n60 0\n65.5 15\n73.5 15\n79 30\n87 30\n92.5 45\n100.5 45\n106 60\n114 60\n119.5 75\n127.5 75\n133 90\n141 90\n146.5 105\n260 105', terrain: null,
+    materials: [
+      { id: 'ox', name: 'Oxide zone', color: '#c08a52', model: 'mc', gamma: 21.5, gammaSat: 22, c: 60, phi: 33, su: 100, gsi: 50, mi: 10, D: 0, sigci: 30000, water: 'wt', ru: 0 },
+      { id: 'fr', name: 'Fresh schist', color: '#7d8a83', model: 'hb', gamma: 26.5, gammaSat: 26.5, c: 0, phi: 35, su: 100, gsi: 50, mi: 10, D: 0.7, sigci: 30000, water: 'wt', ru: 0 }],
+    groundMaterial: 'ox', layers: [{ id: 'l1', material: 'fr', kind: 'plane', z: 80, text: '' }],
+    water: { kind: 'profile', z: 0, text: '0 0\n60 0\n110 30\n160 60\n260 80' }, gammaW: 9.81,
+    loads: [{ x0: 40, x1: 110, y0: 165, y1: 235, q: 150 }], seismic: { kh: 0, kv: 0 },
+    search: { type: 'ellipsoid', methods: ['bishop', 'janbu'], azimuthMode: 'auto', azimuth: 180, azimuthRange: 30, limitsOn: false, limits: { x0: 0, x1: 150, y0: 0, y1: 260 }, particles: 50, iterations: 60, columns: 50, seed: 1 },
+    note: 'Example numbers only, not a real site. Stockpile surcharge 150 kPa behind the crest.',
+  }),
+};
+
+/* ------------------------------------------------------------- state */
+let project = null, result = null, stale = false, tab = 'model', running = null;
+const view = { method: null, colorBy: 'sigmaEff', showTop: true, xray: true };
+const LS = 'talus3d.project.v1';
+function save() { try { localStorage.setItem(LS, JSON.stringify(project)); } catch (e) {} }
+function load() { try { const s = localStorage.getItem(LS); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+project = load() || EXAMPLES.acads();
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600); }
+
+/* ------------------------------------------------------------- parsing */
+function parse2(text) {
+  const pts = [];
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const nums = line.trim().split(/[\s,;]+/).map(Number);
+    if (nums.length >= 2 && nums.slice(0, 2).every(isFinite) && line.trim()) pts.push([nums[0], nums[1]]);
+  }
+  return pts;
+}
+function parse3(text) {
+  const pts = [];
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim(); if (!t) continue;
+    const nums = t.split(/[\s,;]+/).map(Number);
+    if (nums.length >= 3 && isFinite(nums[0]) && isFinite(nums[1]) && isFinite(nums[2])) pts.push([nums[0], nums[1], nums[2]]);
+  }
+  return pts;
+}
+function rasterFromPoints(pts, n) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+  if (!(x1 > x0 && y1 > y0)) throw new Error('Points must spread over an area');
+  if (typeof Delaunator === 'undefined') throw new Error('The triangulation library did not load; check your connection');
+  const d = Delaunator.from(pts.map(p => [p[0], p[1]]));
+  const r = S.rasterFromTIN(pts, d.triangles, { x0, x1, y0, y1 }, n, n);
+  let zmin = Infinity, zmax = -Infinity; for (const p of pts) { zmin = Math.min(zmin, p[2]); zmax = Math.max(zmax, p[2]); }
+  return { raster: r, info: `${pts.length.toLocaleString()} points · x ${fmt(x0, 1)}–${fmt(x1, 1)} · y ${fmt(y0, 1)}–${fmt(y1, 1)} · z ${fmt(zmin, 1)}–${fmt(zmax, 1)}` };
+}
+
+// Convert the editable project into the solver's model.
+function toSolver(p) {
+  const errors = [];
+  let ground, extent;
+  if (p.mode === 'terrain') {
+    if (!p.terrain || !p.terrain.raster) { errors.push('Load a survey points file for the ground surface.'); return { errors }; }
+    ground = p.terrain.raster;
+    extent = { x0: ground.x0, x1: ground.x1, y0: ground.y0, y1: ground.y1 };
+  } else {
+    const pts = parse2(p.profileText);
+    if (pts.length < 2) { errors.push('The ground profile needs at least two points (y z per line).'); return { errors }; }
+    ground = { kind: 'profile', axis: 'y', points: pts };
+    const ys = pts.map(q => q[0]);
+    extent = { x0: 0, x1: +p.width || 50, y0: Math.min(...ys), y1: Math.max(...ys) };
+    if (!(extent.y1 > extent.y0)) errors.push('Profile y values must span a distance.');
+  }
+  const surf = (o, what) => {
+    if (o.kind === 'plane') return { kind: 'plane', z: +o.z };
+    if (o.kind === 'profile') { const pts = parse2(o.text); if (pts.length < 2) { errors.push(what + ': enter at least two points.'); return { kind: 'plane', z: -1e9 }; } return { kind: 'profile', axis: 'y', points: pts }; }
+    if (o.kind === 'raster') { if (!o.raster) { errors.push(what + ': load a points file.'); return { kind: 'plane', z: -1e9 }; } return o.raster; }
+    return null;
+  };
+  const ids = new Set(p.materials.map(m => m.id));
+  const layers = p.layers.map((l, i) => ({ surface: surf(l, 'Layer ' + (i + 1)), material: ids.has(l.material) ? l.material : p.materials[0].id }));
+  const water = p.water.kind === 'none' ? null : surf(p.water, 'Water table');
+  const s = p.search;
+  const methods = ['bishop', 'janbu'].filter(m => s.methods.includes(m));
+  if (!methods.length) errors.push('Pick at least one method.');
+  if (s.type === 'cylinder' && p.mode === 'terrain') errors.push('The 2D cylinder surface needs an extruded profile model.');
+  const model = {
+    extent, ground, layers, groundMaterial: ids.has(p.groundMaterial) ? p.groundMaterial : p.materials[0].id,
+    materials: p.materials.map(m => ({ ...m })), water, gammaW: +p.gammaW || 9.81,
+    loads: p.loads.map(l => ({ ...l })), seismic: { kh: +p.seismic.kh || 0, kv: +p.seismic.kv || 0 },
+    search: {
+      type: s.type, methods, azimuth: s.azimuthMode === 'manual' ? +s.azimuth : null, azimuthRange: +s.azimuthRange,
+      limits: s.limitsOn ? { ...s.limits } : null, particles: +s.particles, iterations: +s.iterations, columns: +s.columns, seed: +s.seed,
+    },
+  };
+  return { model, errors };
+}
+
+/* ------------------------------------------------------------- tabs & panel */
+const TABS = [['model', 'Geometry'], ['materials', 'Materials'], ['water', 'Water & loads'], ['search', 'Search'], ['results', 'Results']];
+function renderTabs() {
+  $('tabs').innerHTML = TABS.map(([k, l], i) => `<button role="tab" type="button" data-tab="${k}" aria-selected="${tab === k}"><span class="step">${i + 1}</span>${l}</button>`).join('');
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; renderTabs(); renderPanel(); updateScene(); } });
+
+const num = (path, label, unit, step = 'any') => `<label class="f"><span>${label}${unit ? `<span class="u">${unit}</span>` : ''}</span><input type="number" step="${step}" data-k="${path}" value="${esc(get(path))}"></label>`;
+const matOptions = sel => project.materials.map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+function get(path) { return path.split('.').reduce((o, k) => o == null ? o : o[k], project); }
+function set(path, val) {
+  const ks = path.split('.'); let o = project;
+  for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]];
+  o[ks[ks.length - 1]] = val;
+}
+
+function surfEditor(obj, path, kinds, what) {
+  const k = obj.kind;
+  const opts = kinds.map(([v, l]) => `<option value="${v}" ${k === v ? 'selected' : ''}>${l}</option>`).join('');
+  let body = '';
+  if (k === 'plane') body = num(path + '.z', 'Elevation', 'm');
+  else if (k === 'profile') body = `<textarea data-k="${path}.text" spellcheck="false" aria-label="${what} points" placeholder="y z, one point per line">${esc(obj.text)}</textarea>`;
+  else if (k === 'raster') body = `<div class="row"><button type="button" class="small" data-pick="${path}">Load points file…</button><span class="hint">${esc(obj.info || 'x y z, one point per line (csv or txt)')}</span></div>`;
+  return `<label class="f"><span>Surface</span><select data-k="${path}.kind">${opts}</select></label>${body}`;
+}
+
+function renderPanel() {
+  const p = project, el = $('panel');
+  $('projName').value = p.name;
+  let h = '';
+  if (tab === 'model') {
+    h += `<section class="group"><h2>Model</h2>
+      <div class="seg" role="radiogroup" aria-label="Model type">
+        <label><input type="radio" name="mode" value="extruded" ${p.mode === 'extruded' ? 'checked' : ''}> Extruded profile</label>
+        <label><input type="radio" name="mode" value="terrain" ${p.mode === 'terrain' ? 'checked' : ''}> Survey terrain</label>
+      </div>`;
+    if (p.mode === 'extruded') {
+      h += `<p class="hint">Ground profile in the y–z plane, one point per line as <b>y z</b> in metres. It is extruded along x. Paste from a spreadsheet or a section.</p>
+        <textarea data-k="profileText" spellcheck="false" aria-label="Ground profile points">${esc(p.profileText)}</textarea>
+        ${num('width', 'Extrusion width along x', 'm')}`;
+    } else {
+      h += `<p class="hint">Load a survey of the pit or slope as <b>x y z</b> points (csv, txt or xyz). Points are triangulated and resampled onto a grid.</p>
+        <div class="row"><button type="button" data-pick="terrain">Load survey points…</button></div>
+        <p class="hint">${esc(p.terrain && p.terrain.info || 'No survey loaded yet.')}</p>
+        ${num('gridN', 'Grid resolution', 'cells', 1)}`;
+    }
+    h += `</section><section class="group"><h2>Layers <button type="button" class="small" data-act="addLayer">Add interface</button></h2>
+      <label class="f"><span>Material at the surface</span><select data-k="groundMaterial">${matOptions(p.groundMaterial)}</select></label>
+      <p class="hint">Each interface is the top of a new material, listed from the top down. Interfaces are clipped to the ground.</p>`;
+    p.layers.forEach((l, i) => {
+      const kinds = p.mode === 'terrain' ? [['plane', 'Horizontal plane'], ['raster', 'Points file']] : [['plane', 'Horizontal plane'], ['profile', 'Profile (y z)']];
+      h += `<div class="item"><div class="head"><b>Interface ${i + 1}</b><span class="hint" style="flex:1">material below</span><select data-k="layers.${i}.material" style="max-width:150px">${matOptions(l.material)}</select><button type="button" class="small ghost" data-act="delLayer" data-i="${i}" aria-label="Remove interface ${i + 1}">Remove</button></div>${surfEditor(l, 'layers.' + i, kinds, 'Interface ' + (i + 1))}</div>`;
+    });
+    h += `</section>`;
+  }
+  if (tab === 'materials') {
+    h += `<section class="group"><h2>Materials <button type="button" class="small" data-act="addMat">Add material</button></h2>
+      <p class="hint">Unit weights in kN/m³, stresses in kPa. Saturated unit weight applies below the water table.</p>`;
+    p.materials.forEach((m, i) => {
+      const P = 'materials.' + i;
+      h += `<div class="item"><div class="head"><input type="color" data-k="${P}.color" value="${esc(m.color)}" aria-label="Colour"><input type="text" data-k="${P}.name" value="${esc(m.name)}" aria-label="Material name">${p.materials.length > 1 ? `<button type="button" class="small ghost" data-act="delMat" data-i="${i}">Remove</button>` : ''}</div>
+        <label class="f"><span>Strength model</span><select data-k="${P}.model">
+          <option value="mc" ${m.model === 'mc' ? 'selected' : ''}>Mohr-Coulomb</option>
+          <option value="su" ${m.model === 'su' ? 'selected' : ''}>Undrained (Su)</option>
+          <option value="hb" ${m.model === 'hb' ? 'selected' : ''}>Generalized Hoek-Brown</option></select></label>
+        ${num(P + '.gamma', 'Unit weight γ', 'kN/m³')}${num(P + '.gammaSat', 'Saturated γsat', 'kN/m³')}
+        ${m.model === 'mc' ? num(P + '.c', "Cohesion c'", 'kPa') + num(P + '.phi', "Friction angle φ'", '°') : ''}
+        ${m.model === 'su' ? num(P + '.su', 'Undrained strength Su', 'kPa') : ''}
+        ${m.model === 'hb' ? num(P + '.sigci', 'Intact UCS σci', 'kPa') + num(P + '.gsi', 'GSI', '') + num(P + '.mi', 'mi', '') + num(P + '.D', 'Disturbance D', '') : ''}
+        <label class="f"><span>Pore pressure</span><select data-k="${P}.water">
+          <option value="wt" ${m.water === 'wt' ? 'selected' : ''}>From water table</option>
+          <option value="ru" ${m.water === 'ru' ? 'selected' : ''}>Ru coefficient</option>
+          <option value="none" ${m.water === 'none' ? 'selected' : ''}>Dry (none)</option></select></label>
+        ${m.water === 'ru' ? num(P + '.ru', 'Ru', '') : ''}</div>`;
+    });
+    h += `</section>`;
+  }
+  if (tab === 'water') {
+    const kinds = p.mode === 'terrain' ? [['none', 'No water'], ['plane', 'Horizontal plane'], ['raster', 'Points file']] : [['none', 'No water'], ['plane', 'Horizontal plane'], ['profile', 'Profile (y z)']];
+    h += `<section class="group"><h2>Water table</h2><p class="hint">Pore pressure is γw × depth below the water table, vertically. Water above the ground is applied as a vertical load.</p>
+      ${surfEditor(p.water, 'water', kinds, 'Water table')}${num('gammaW', 'Unit weight of water γw', 'kN/m³')}</section>
+      <section class="group"><h2>Surcharge loads <button type="button" class="small" data-act="addLoad">Add load</button></h2>
+      <p class="hint">Vertical pressure on the ground inside a plan rectangle: stockpiles, dumps, haul trucks.</p>`;
+    p.loads.forEach((l, i) => {
+      h += `<div class="item"><div class="head"><b>Load ${i + 1}</b><span style="flex:1"></span><button type="button" class="small ghost" data-act="delLoad" data-i="${i}">Remove</button></div>
+        <div class="grid4"><label>x from<input type="number" data-k="loads.${i}.x0" value="${l.x0}"></label><label>x to<input type="number" data-k="loads.${i}.x1" value="${l.x1}"></label><label>y from<input type="number" data-k="loads.${i}.y0" value="${l.y0}"></label><label>y to<input type="number" data-k="loads.${i}.y1" value="${l.y1}"></label><label>q kPa<input type="number" data-k="loads.${i}.q" value="${l.q}"></label></div></div>`;
+    });
+    h += `</section><section class="group"><h2>Seismic (pseudostatic)</h2>
+      ${num('seismic.kh', 'Horizontal coefficient kh', 'g')}${num('seismic.kv', 'Vertical coefficient kv (down +)', 'g')}
+      <p class="hint">kh acts on every column in the sliding direction.</p></section>`;
+  }
+  if (tab === 'search') {
+    const s = p.search;
+    h += `<section class="group"><h2>Slip surface</h2>
+      <div class="seg" role="radiogroup" aria-label="Surface type">
+        ${[['ellipsoid', 'Ellipsoid'], ['sphere', 'Sphere'], ['cylinder', 'Cylinder (2D)']].map(([v, l]) => `<label><input type="radio" name="stype" value="${v}" ${s.type === v ? 'checked' : ''} ${v === 'cylinder' && p.mode === 'terrain' ? 'disabled' : ''}> ${l}</label>`).join('')}
+      </div>
+      <p class="hint">${s.type === 'cylinder' ? 'Spans the full width with frictionless ends, so it reproduces a 2D analysis. Use it to compare with a 2D section.' : s.type === 'sphere' ? 'Spheres defined by an entry point, an exit point and a radius.' : 'Ellipsoids with a free strike length and section shape. Usually gives the lowest 3D factor of safety.'}</p>
+      <h2>Methods</h2><div class="row">
+        ${[['bishop', 'Bishop simplified'], ['janbu', 'Janbu simplified']].map(([v, l]) => `<label class="row" style="gap:6px"><input type="checkbox" data-meth="${v}" ${s.methods.includes(v) ? 'checked' : ''}> ${l}</label>`).join('')}
+      </div><p class="hint">The search is driven by the first ticked method; each method's critical surface is then refined on its own.</p></section>
+      <section class="group"><h2>Search area</h2>
+      <div class="seg"><label><input type="radio" name="azm" value="auto" ${s.azimuthMode !== 'manual' ? 'checked' : ''}> Downhill direction auto</label><label><input type="radio" name="azm" value="manual" ${s.azimuthMode === 'manual' ? 'checked' : ''}> Set azimuth</label></div>
+      ${s.azimuthMode === 'manual' ? num('search.azimuth', 'Sliding azimuth, from north', '°') : ''}
+      ${s.type !== 'cylinder' ? num('search.azimuthRange', 'Search ± around it', '°') : ''}
+      <label class="row" style="gap:6px"><input type="checkbox" data-k="search.limitsOn" ${s.limitsOn ? 'checked' : ''}> Limit the search to a plan box (one wall of a pit)</label>
+      ${s.limitsOn ? `<div class="grid4" style="grid-template-columns:repeat(4,minmax(0,1fr))"><label>x from<input type="number" data-k="search.limits.x0" value="${s.limits.x0}"></label><label>x to<input type="number" data-k="search.limits.x1" value="${s.limits.x1}"></label><label>y from<input type="number" data-k="search.limits.y0" value="${s.limits.y0}"></label><label>y to<input type="number" data-k="search.limits.y1" value="${s.limits.y1}"></label></div>` : ''}
+      </section><section class="group"><h2>Search effort</h2>
+      ${num('search.particles', 'Particles', '', 1)}${num('search.iterations', 'Iterations', '', 1)}${num('search.columns', 'Columns across final surface', '', 1)}${num('search.seed', 'Random seed', '', 1)}
+      <p class="hint">More particles and iterations search harder. 50 × 60 takes a few seconds.</p></section>`;
+    h += computeBox();
+  }
+  if (tab === 'results') h += resultsPanel();
+  el.innerHTML = h;
+  if (tab === 'results') drawSection();
+}
+
+function computeBox() {
+  const { errors } = toSolver(project);
+  return `<section class="compute" id="computeBox">
+    ${errors.length ? errors.map(e => `<div class="err">${esc(e)}</div>`).join('') : ''}
+    <button type="button" class="primary" data-act="compute" ${errors.length ? 'disabled' : ''}>${running ? 'Cancel' : 'Compute'}</button>
+    <div class="bar"><i id="barFill"></i></div><div class="hint" id="progTxt">${running ? 'Searching…' : result ? 'Last run finished.' : 'Ready.'}</div></section>`;
+}
+
+/* ------------------------------------------------------------- results panel */
+const METHOD_NAME = { bishop: 'Bishop', janbu: 'Janbu' };
+const DATA = {
+  sigmaEff: ['Effective normal stress', 'kPa'], sigma: ['Total normal stress', 'kPa'], u: ['Pore pressure', 'kPa'],
+  strength: ['Shear strength', 'kPa'], tau: ['Mobilised shear stress', 'kPa'], dip: ['Base dip', '°'], malpha: ['m-alpha', ''], mat: ['Material', ''],
+};
+function fsClass(F) { return F < 1 ? ['bad', 'Unstable'] : F < 1.3 ? ['warn', 'Marginal'] : ['good', 'Above 1.3']; }
+function azFromAlpha(a) { return ((90 - a / DEG) % 360 + 360) % 360; }
+
+function resultsPanel() {
+  if (!result) return `<section class="group"><h2>Results</h2><p class="hint">Nothing computed yet. Set up the model, then press Compute.</p></section>${computeBox()}`;
+  const m = view.method, r = result.results[m];
+  let h = stale ? `<div class="stale">The model changed since this run. Compute again to update the results.</div>` : '';
+  h += `<section class="group"><h2>Factor of safety <span class="hint">critical ${result.cfg.type}</span></h2><div class="fsrow">`;
+  for (const k of result.methods) {
+    const rr = result.results[k]; if (!rr) continue;
+    const [cl, lab] = fsClass(rr.F);
+    h += `<button type="button" class="fs" data-method="${k}" aria-pressed="${k === m}"><span class="m">${METHOD_NAME[k]} 3D</span><span class="v">${fmt(rr.F, 3)}</span><span class="pill ${cl}">${lab}</span></button>`;
+  }
+  h += `</div><p class="hint">Bands: below 1.0, 1.0–1.3, above 1.3. Check them against your site's acceptance criteria.</p>`;
+  if (r) {
+    const other = Object.entries(r.allFS).filter(([k]) => k !== m).map(([k, v]) => `${METHOD_NAME[k]} ${fmt(v, 3)}`).join(', ');
+    h += `<dl class="kv"><dt>Sliding direction</dt><dd>${fmt(azFromAlpha(r.alpha), 1)}° from north</dd>
+      <dt>Sliding mass volume</dt><dd>${Math.round(r.volume).toLocaleString()} m³</dd>
+      <dt>Columns</dt><dd>${r.columns.length.toLocaleString()} (${fmt(r.du, 2)} × ${fmt(r.dv, 2)} m)</dd>
+      ${other ? `<dt>Same surface, other method</dt><dd>${other}</dd>` : ''}
+      <dt>Surfaces tried</dt><dd>${result.stats.evaluated.toLocaleString()} (${result.stats.valid.toLocaleString()} valid)</dd></dl>`;
+  }
+  h += `</section><section class="group"><h2>Display</h2>
+    <label class="f"><span>Colour the slip surface by</span><select id="colorBy">${Object.entries(DATA).map(([k, [l]]) => `<option value="${k}" ${k === view.colorBy ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="row" style="gap:6px"><input type="checkbox" id="showTop" ${view.showTop ? 'checked' : ''}> Show the 40 lowest trial surfaces</label>
+    <label class="row" style="gap:6px"><input type="checkbox" id="xray" ${view.xray ? 'checked' : ''}> See-through ground</label></section>
+    <section class="group"><h2>Section through the critical surface</h2><canvas class="section" id="sectionCv" aria-label="Cross section through the critical slip surface"></canvas>
+    <p class="hint">Vertical cut along the surface's section line through its centre. No vertical exaggeration.</p></section>`;
+  if (r) {
+    const cols = r.columns, n = Math.min(cols.length, 400);
+    h += `<section class="group"><h2>Column data <span class="row" style="gap:6px"><button type="button" class="small" data-act="copyCsv">Copy CSV</button>${canSave() ? '<button type="button" class="small" data-act="saveCsv">Save CSV</button>' : ''}</span></h2>
+      <div class="tablewrap"><table><thead><tr><th>#</th><th>x</th><th>y</th><th>base z</th><th>height</th><th>weight kN</th><th>σn kPa</th><th>u kPa</th><th>σ'n kPa</th><th>τf kPa</th><th>τ kPa</th><th>dip °</th><th>material</th></tr></thead><tbody>
+      ${cols.slice(0, n).map((c, i) => `<tr><td>${i + 1}</td><td>${fmt(c.x, 1)}</td><td>${fmt(c.y, 1)}</td><td>${fmt(c.zb, 2)}</td><td>${fmt(c.zt - c.zb, 2)}</td><td>${fmt(c.weight, 0)}</td><td>${fmt(c.sigma, 1)}</td><td>${fmt(c.u, 1)}</td><td>${fmt(c.sigmaEff, 1)}</td><td>${fmt(c.strength, 1)}</td><td>${fmt(c.tau, 1)}</td><td>${fmt(c.dip, 1)}</td><td style="text-align:left">${esc(project.materials[c.mat] ? project.materials[c.mat].name : c.mat)}</td></tr>`).join('')}
+      </tbody></table></div>${cols.length > n ? `<p class="hint">Showing ${n} of ${cols.length.toLocaleString()} columns. Copy CSV has them all.</p>` : ''}</section>
+      <section class="group"><h2>Summary for the file <button type="button" class="small" data-act="copyReport">Copy summary</button></h2><textarea class="out" readonly id="reportTxt" aria-label="Summary">${esc(reportText())}</textarea></section>`;
+  }
+  h += computeBox();
+  return h;
+}
+
+function reportText() {
+  const p = project, lines = [];
+  lines.push(`Talus 3D limit-equilibrium analysis: ${p.name}`);
+  lines.push(`Run: ${new Date().toISOString().slice(0, 16).replace('T', ' ')} · solver ${S.version}`);
+  lines.push(`Model: ${p.mode === 'extruded' ? `extruded profile, width ${p.width} m` : 'survey terrain'}, ${p.layers.length + 1} zone(s)`);
+  lines.push('Materials:');
+  for (const m of p.materials) {
+    const str = m.model === 'mc' ? `MC c'=${m.c} kPa, φ'=${m.phi}°` : m.model === 'su' ? `Su=${m.su} kPa` : `HB σci=${m.sigci} kPa, GSI=${m.gsi}, mi=${m.mi}, D=${m.D}`;
+    lines.push(`  ${m.name}: γ=${m.gamma}, γsat=${m.gammaSat} kN/m³, ${str}, pore pressure ${m.water === 'ru' ? 'Ru=' + m.ru : m.water === 'wt' ? 'water table' : 'none'}`);
+  }
+  lines.push(`Water table: ${p.water.kind === 'none' ? 'none' : p.water.kind}. Loads: ${p.loads.length ? p.loads.map(l => l.q + ' kPa').join(', ') : 'none'}. Seismic kh=${p.seismic.kh}, kv=${p.seismic.kv}.`);
+  lines.push(`Search: ${result.cfg.type}, particle swarm + refinement, ${result.stats.evaluated} surfaces (${result.stats.valid} valid).`);
+  for (const k of result.methods) {
+    const r = result.results[k]; if (!r) continue;
+    lines.push(`${METHOD_NAME[k]} simplified 3D: FS = ${fmt(r.F, 3)}, sliding direction ${fmt(azFromAlpha(r.alpha), 1)}° from north, mass ${Math.round(r.volume)} m³, ${r.columns.length} columns`);
+  }
+  lines.push('Methods after Hungr (1987), Huang et al. (2002), Cheng & Yip (2007). Independently built tool: verify against benchmarks before relying on results.');
+  return lines.join('\n');
+}
+
+function csvText() {
+  const r = result.results[view.method];
+  const head = 'x,y,base_z,top_z,weight_kN,sigma_n_kPa,u_kPa,sigma_eff_kPa,shear_strength_kPa,mobilised_shear_kPa,dip_deg,dip_dir_deg,m_alpha,material';
+  return head + '\n' + r.columns.map(c => [c.x, c.y, c.zb, c.zt, c.weight, c.sigma, c.u, c.sigmaEff, c.strength, c.tau, c.dip, c.dipdir, c.malpha].map(v => (+v).toFixed(3)).join(',') + ',' + (project.materials[c.mat] ? project.materials[c.mat].name.replace(/,/g, ' ') : '')).join('\n');
+}
+
+async function copy(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(what + ' copied'); }
+  catch (e) {
+    const ta = $('reportTxt') || document.createElement('textarea');
+    if (!ta.parentNode) { ta.className = 'out'; $('panel').appendChild(ta); }
+    ta.value = text; ta.focus(); ta.select(); toast('Copy blocked here: the text is selected, press Ctrl+C');
+  }
+}
+
+/* ------------------------------------------------------------- panel events */
+const panel = $('panel');
+function changed(structural) {
+  save();
+  if (result) stale = true;
+  if (structural) renderPanel(); else { const cb = $('computeBox'); if (cb) cb.outerHTML = computeBox(); }
+  scheduleScene();
+}
+panel.addEventListener('input', e => {
+  const t = e.target, k = t.dataset.k;
+  if (!k || t.type === 'checkbox' || t.tagName === 'SELECT' || t.type === 'radio') return;
+  set(k, t.type === 'number' ? (t.value === '' ? '' : +t.value) : t.value);
+  changed(false);
+});
+panel.addEventListener('change', e => {
+  const t = e.target;
+  if (t.name === 'mode') { project.mode = t.value; if (t.value === 'terrain' && project.search.type === 'cylinder') project.search.type = 'ellipsoid'; fixKinds(); changed(true); return; }
+  if (t.name === 'stype') { project.search.type = t.value; changed(true); return; }
+  if (t.name === 'azm') { project.search.azimuthMode = t.value; changed(true); return; }
+  if (t.dataset.meth) { const s = new Set(project.search.methods); t.checked ? s.add(t.dataset.meth) : s.delete(t.dataset.meth); project.search.methods = ['bishop', 'janbu'].filter(m => s.has(m)); changed(true); return; }
+  if (t.id === 'colorBy') { view.colorBy = t.value; buildResultScene(); return; }
+  if (t.id === 'showTop') { view.showTop = t.checked; buildResultScene(); return; }
+  if (t.id === 'xray') { view.xray = t.checked; applyXray(); return; }
+  const k = t.dataset.k; if (!k) return;
+  if (t.type === 'checkbox') set(k, t.checked);
+  else if (t.tagName === 'SELECT') set(k, t.value);
+  else return;
+  changed(true);
+});
+function fixKinds() {
+  const ok = project.mode === 'terrain' ? ['plane', 'raster'] : ['plane', 'profile'];
+  for (const l of project.layers) if (!ok.includes(l.kind)) l.kind = 'plane';
+  if (project.water.kind !== 'none' && !ok.includes(project.water.kind)) project.water.kind = 'none';
+}
+panel.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const a = b.dataset.act, i = +b.dataset.i;
+  if (b.dataset.method) { view.method = b.dataset.method; renderPanel(); buildResultScene(); return; }
+  if (b.dataset.pick) { pickPoints(b.dataset.pick); return; }
+  if (a === 'addLayer') { project.layers.push({ id: uid(), material: project.materials[project.materials.length - 1].id, kind: 'plane', z: guessZ(), text: '' }); changed(true); }
+  if (a === 'delLayer') { project.layers.splice(i, 1); changed(true); }
+  if (a === 'addMat') { project.materials.push({ id: uid(), name: 'Material ' + (project.materials.length + 1), color: ['#a7b7a0', '#c9a46b', '#8f9fb6', '#b88a7a', '#9fb3a9'][project.materials.length % 5], model: 'mc', gamma: 20, gammaSat: 21, c: 10, phi: 30, su: 50, gsi: 50, mi: 10, D: 0, sigci: 30000, water: 'wt', ru: 0 }); changed(true); }
+  if (a === 'delMat') {
+    const id = project.materials[i].id; project.materials.splice(i, 1);
+    const f = project.materials[0].id;
+    if (project.groundMaterial === id) project.groundMaterial = f;
+    project.layers.forEach(l => { if (l.material === id) l.material = f; });
+    changed(true);
+  }
+  if (a === 'addLoad') { const t = toSolver(project).model; const e2 = t ? t.extent : { x0: 0, x1: 10, y0: 0, y1: 10 }; project.loads.push({ x0: e2.x0, x1: (e2.x0 + e2.x1) / 2, y0: e2.y1 - (e2.y1 - e2.y0) * 0.25, y1: e2.y1, q: 50 }); changed(true); }
+  if (a === 'delLoad') { project.loads.splice(i, 1); changed(true); }
+  if (a === 'compute') compute();
+  if (a === 'copyCsv') copy(csvText(), 'Column data');
+  if (a === 'saveCsv') saveAs(projFile().replace('.talus.json', '_columns.csv'), csvText());
+  if (a === 'copyReport') copy(reportText(), 'Summary');
+});
+function guessZ() { try { const t = toSolver(project).model; const M = S.prepare(t); const e = t.extent; return Math.round(M.G((e.x0 + e.x1) / 2, (e.y0 + e.y1) / 2) - 5); } catch (e) { return 0; } }
+
+// file picking for survey points
+const picker = document.createElement('input'); picker.type = 'file'; picker.accept = '.csv,.txt,.xyz,.pts'; picker.hidden = true; document.body.appendChild(picker);
+let pickTarget = null;
+function pickPoints(target) { pickTarget = target; picker.value = ''; picker.click(); }
+picker.addEventListener('change', async () => {
+  const f = picker.files[0]; if (!f) return;
+  try {
+    const pts = parse3(await f.text());
+    if (pts.length < 3) throw new Error('Found fewer than 3 points with x y z values.');
+    const n = Math.max(40, Math.min(400, +project.gridN || 150));
+    const r = rasterFromPoints(pts, n);
+    if (pickTarget === 'terrain') { project.terrain = r; const e = r.raster; project.search.limits = { x0: e.x0, x1: e.x1, y0: e.y0, y1: e.y1 }; }
+    else { const o = get(pickTarget); o.raster = r.raster; o.info = r.info; }
+    toast(`Loaded ${pts.length.toLocaleString()} points from ${f.name}`);
+    changed(true); fitCamera = true;
+  } catch (err) { toast(err.message); }
+});
+
+/* ------------------------------------------------------------- header actions */
+$('projName').addEventListener('input', e => { project.name = e.target.value; save(); });
+$('exampleSel').addEventListener('change', e => {
+  const k = e.target.value; e.target.value = ''; if (!k) return;
+  stopRun(); project = EXAMPLES[k](); if (!project.gridN) project.gridN = 150; result = null; stale = false; view.method = null; save();
+  fitCamera = true; tab = 'model'; renderTabs(); renderPanel(); updateScene(); compute();
+});
+$('openBtn').addEventListener('click', () => $('openFile').click());
+$('openFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const p = JSON.parse(await f.text());
+    if (!p.materials || !p.search) throw new Error('This file is not a Talus project.');
+    stopRun(); project = p; result = null; stale = false; save(); fitCamera = true; renderPanel(); updateScene(); toast('Opened ' + f.name);
+  } catch (err) { toast('Could not open: ' + err.message); }
+  e.target.value = '';
+});
+$('copyProj').addEventListener('click', () => copy(JSON.stringify(project), 'Project'));
+let dl = null;
+async function saveAs(filename, data) {
+  if (dl) {
+    try { await dl.save({ filename, data }); toast('Saved ' + filename); }
+    catch (e) { if (e && e.code !== 'declined') toast('Could not save: ' + (e.message || e.code)); }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/octet-stream' }));
+  a.download = filename; a.click();
+}
+const projFile = () => (project.name || 'project').replace(/[^\w.-]+/g, '_') + '.talus.json';
+$('saveFile').addEventListener('click', () => saveAs(projFile(), JSON.stringify(project, null, 1)));
+const inClaude = !!(window.claude && window.claude.use);
+if (!inClaude) $('saveFile').hidden = false;   // a normal website or a local file: browser downloads work
+else window.claude.use('downloads').then(d => { dl = d; if (d) { $('saveFile').hidden = false; if (tab === 'results') renderPanel(); } }).catch(() => {});
+const canSave = () => !!dl || !inClaude;
+$('computeTop').addEventListener('click', () => compute());
+document.addEventListener('paste', e => {
+  if (e.target.closest && e.target.closest('input, textarea')) return;
+  const t = e.clipboardData && e.clipboardData.getData('text');
+  try { const p = JSON.parse(t); if (p && p.materials && p.search) { stopRun(); project = p; result = null; save(); fitCamera = true; renderPanel(); updateScene(); toast('Project pasted'); } } catch (err) {}
+});
+
+/* ------------------------------------------------------------- compute */
+const solverURL = URL.createObjectURL(new Blob([$('solverSrc').textContent], { type: 'text/javascript' }));
+function stopRun() { if (running) { running.terminate(); running = null; } }
+function compute() {
+  if (running) { stopRun(); $('computeTop').textContent = 'Compute'; renderPanel(); return; }
+  const { model, errors } = toSolver(project);
+  if (errors.length) { tab = 'search'; renderTabs(); renderPanel(); toast(errors[0]); return; }
+  const w = new Worker(solverURL); running = w;
+  $('computeTop').textContent = 'Cancel';
+  const cb = $('computeBox'); if (cb) cb.outerHTML = computeBox();
+  const t0 = performance.now();
+  w.onmessage = ev => {
+    const m = ev.data;
+    if (m.type === 'progress') {
+      const f = $('barFill'); if (f) f.style.width = (m.p.frac * 100).toFixed(0) + '%';
+      const t = $('progTxt'); if (t) t.textContent = `Searching… lowest FS so far ${fmt(m.p.best, 3)}${m.p.evals ? ` · ${m.p.evals.toLocaleString()} surfaces` : ''}`;
+    } else if (m.type === 'done') {
+      running = null; w.terminate(); $('computeTop').textContent = 'Compute';
+      result = m.result; stale = false;
+      if (!view.method || !result.results[view.method]) view.method = result.primary in result.results ? result.primary : Object.keys(result.results)[0];
+      tab = 'results'; renderTabs(); renderPanel(); buildResultScene();
+      toast(`Done in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+    } else if (m.type === 'error') {
+      running = null; w.terminate(); $('computeTop').textContent = 'Compute'; renderPanel(); toast(m.message);
+    }
+  };
+  w.onerror = e => { running = null; $('computeTop').textContent = 'Compute'; renderPanel(); toast('Solver error: ' + (e.message || 'unknown')); };
+  w.postMessage({ cmd: 'run', project: model });
+}
+
+/* ------------------------------------------------------------- 3D scene */
+let renderer, scene, camera, controls, modelGroup, resultGroup, fitCamera = true, sceneTimer = null;
+let M = null, MODEL = null, origin = [0, 0, 0], zmin = 0, groundMat = null;
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const RAMP = ['#00204d', '#31446b', '#666970', '#958f78', '#cbba69', '#ffe945'];
+function rampColor(t) {
+  t = Math.max(0, Math.min(1, t)) * (RAMP.length - 1);
+  const i = Math.min(RAMP.length - 2, Math.floor(t)), f = t - i;
+  const a = new THREE.Color(RAMP[i]), b = new THREE.Color(RAMP[i + 1]);
+  return a.lerp(b, f);
+}
+
+function initGL() {
+  if (typeof THREE === 'undefined') { $('ovMsg').hidden = false; $('ovMsg').textContent = 'The 3D library could not load. Check your internet connection and reload.'; return false; }
+  const cv = $('gl');
+  renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1e6);
+  camera.up.set(0, 0, 1);
+  controls = new THREE.OrbitControls(camera, cv);
+  controls.enableDamping = true; controls.dampingFactor = 0.12;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x556655, 0.75));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.65); sun.position.set(-0.5, -0.8, 1.4); scene.add(sun);
+  modelGroup = new THREE.Group(); resultGroup = new THREE.Group(); scene.add(modelGroup); scene.add(resultGroup);
+  new ResizeObserver(resize).observe($('view'));
+  resize(); applyTheme();
+  (function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+  return true;
+}
+function resize() {
+  if (!renderer) return;
+  const v = $('view'), w = v.clientWidth, h = v.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+}
+function applyTheme() { if (scene) scene.background = new THREE.Color(css('--view') || '#dde3dc'); if (tab === 'results') drawSection(); }
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+function clearGroup(g) { while (g.children.length) { const o = g.children.pop(); o.traverse(n => { if (n.geometry) n.geometry.dispose(); if (n.material) [].concat(n.material).forEach(m => m.dispose()); }); } }
+function scheduleScene() { clearTimeout(sceneTimer); sceneTimer = setTimeout(updateScene, 250); }
+
+function zoneAt(x, y, z) {
+  // index into M.zonesMat for height z at (x, y)
+  let k = 0;
+  for (let i = 0; i < M.layers.length; i++) if (z < M.layers[i].at(x, y) - 1e-6) k = i + 1;
+  return k;
+}
+const matColor = idx => new THREE.Color((project.materials[idx] && project.materials[idx].color) || '#999999');
+
+function updateScene() {
+  if (!renderer) return;
+  const { model, errors } = toSolver(project);
+  clearGroup(modelGroup);
+  if (errors.length || !model) { $('ovMsg').hidden = false; $('ovMsg').textContent = errors[0] || 'Set up the model'; M = null; return; }
+  try { M = S.prepare(model); } catch (e) { $('ovMsg').hidden = false; $('ovMsg').textContent = e.message; M = null; return; }
+  $('ovMsg').hidden = true; MODEL = model;
+  const e = model.extent, N = 90;
+  let gmin = Infinity, gmax = -Infinity;
+  const hx = (e.x1 - e.x0) / N, hy = (e.y1 - e.y0) / N;
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) { const z = M.G(e.x0 + i * hx, e.y0 + j * hy); gmin = Math.min(gmin, z); gmax = Math.max(gmax, z); }
+  let lmin = gmin; for (const L of M.layers) for (let i = 0; i <= 10; i++) for (let j = 0; j <= 10; j++) lmin = Math.min(lmin, L.at(e.x0 + i * (e.x1 - e.x0) / 10, e.y0 + j * (e.y1 - e.y0) / 10));
+  const relief = Math.max(1, gmax - gmin, Math.max(e.x1 - e.x0, e.y1 - e.y0) * 0.15);
+  zmin = Math.min(gmin, lmin) - 0.3 * relief;
+  origin = [(e.x0 + e.x1) / 2, (e.y0 + e.y1) / 2, zmin];
+  const O = origin;
+  // ground surface
+  const pos = [], col = [], idx = [];
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+    const x = e.x0 + i * hx, y = e.y0 + j * hy, z = M.G(x, y);
+    pos.push(x - O[0], y - O[1], z - O[2]);
+    const c = matColor(M.zonesMat[zoneAt(x, y, z - 1e-3)]); col.push(c.r, c.g, c.b);
+  }
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1; idx.push(a, b, d, a, d, c); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
+  groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 1 });
+  modelGroup.add(new THREE.Mesh(g, groundMat));
+  // block sides with layer bands
+  const sides = [[[e.x0, e.y0], [e.x1, e.y0]], [[e.x1, e.y0], [e.x1, e.y1]], [[e.x1, e.y1], [e.x0, e.y1]], [[e.x0, e.y1], [e.x0, e.y0]]];
+  const sp = [], sc = [];
+  for (const [A, B] of sides) {
+    const n = 80;
+    for (let s = 0; s < n; s++) {
+      const P = [0, 1].map(t => [A[0] + (B[0] - A[0]) * (s + t) / n, A[1] + (B[1] - A[1]) * (s + t) / n]);
+      const hs = P.map(([x, y]) => [M.G(x, y)].concat(M.layers.map(L => L.at(x, y)), [zmin]));
+      for (let k = 0; k <= M.layers.length; k++) {
+        const t0 = hs[0][k], b0 = Math.max(zmin, hs[0][k + 1]), t1 = hs[1][k], b1 = Math.max(zmin, hs[1][k + 1]);
+        if (t0 - b0 < 1e-6 && t1 - b1 < 1e-6) continue;
+        const v = [[P[0][0], P[0][1], b0], [P[1][0], P[1][1], b1], [P[1][0], P[1][1], t1], [P[0][0], P[0][1], t0]].map(q => [q[0] - O[0], q[1] - O[1], q[2] - O[2]]);
+        for (const q of [v[0], v[1], v[2], v[0], v[2], v[3]]) sp.push(...q);
+        const c = matColor(M.zonesMat[k]).multiplyScalar(0.82); for (let r = 0; r < 6; r++) sc.push(c.r, c.g, c.b);
+      }
+    }
+  }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); sg.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3)); sg.computeVertexNormals();
+  modelGroup.add(new THREE.Mesh(sg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  // base outline
+  const box = new THREE.Box3(new THREE.Vector3(e.x0 - O[0], e.y0 - O[1], 0), new THREE.Vector3(e.x1 - O[0], e.y1 - O[1], gmax - O[2]));
+  const bh = new THREE.Box3Helper(box, new THREE.Color(css('--muted') || '#888')); bh.material.transparent = true; bh.material.opacity = 0.35; modelGroup.add(bh);
+  // water table
+  if (M.W) {
+    const wp = [], wi = [], Nw = 40;
+    for (let j = 0; j <= Nw; j++) for (let i = 0; i <= Nw; i++) { const x = e.x0 + i * (e.x1 - e.x0) / Nw, y = e.y0 + j * (e.y1 - e.y0) / Nw; wp.push(x - O[0], y - O[1], Math.max(zmin, M.W(x, y)) - O[2]); }
+    for (let j = 0; j < Nw; j++) for (let i = 0; i < Nw; i++) { const a = j * (Nw + 1) + i, b = a + 1, c = a + Nw + 1, d = c + 1; wi.push(a, b, d, a, d, c); }
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setIndex(wi); wg.computeVertexNormals();
+    modelGroup.add(new THREE.Mesh(wg, new THREE.MeshLambertMaterial({ color: new THREE.Color(css('--water') || '#2f6fb3'), transparent: true, opacity: 0.38, side: THREE.DoubleSide, depthWrite: false })));
+  }
+  // surcharge loads
+  for (const l of model.loads) {
+    const lp = [], Nl = 12;
+    const x0 = Math.max(e.x0, Math.min(l.x0, l.x1)), x1 = Math.min(e.x1, Math.max(l.x0, l.x1)), y0 = Math.max(e.y0, Math.min(l.y0, l.y1)), y1 = Math.min(e.y1, Math.max(l.y0, l.y1));
+    if (!(x1 > x0 && y1 > y0)) continue;
+    for (let j = 0; j < Nl; j++) for (let i = 0; i < Nl; i++) {
+      const q = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j], [i + 1, j + 1], [i, j + 1]];
+      for (const [a, b] of q) { const x = x0 + (x1 - x0) * a / Nl, y = y0 + (y1 - y0) * b / Nl; lp.push(x - O[0], y - O[1], M.G(x, y) + relief * 0.01 - O[2]); }
+    }
+    const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+    modelGroup.add(new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ color: new THREE.Color(css('--accent')), transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false })));
+  }
+  // search limits
+  if (model.search.limits) {
+    const L = model.search.limits;
+    const lb = new THREE.Box3(new THREE.Vector3(Math.min(L.x0, L.x1) - O[0], Math.min(L.y0, L.y1) - O[1], 0), new THREE.Vector3(Math.max(L.x0, L.x1) - O[0], Math.max(L.y0, L.y1) - O[1], gmax - O[2] + relief * 0.1));
+    modelGroup.add(new THREE.Box3Helper(lb, new THREE.Color(css('--accent'))));
+  }
+  if (fitCamera) {
+    const span = Math.max(e.x1 - e.x0, e.y1 - e.y0, gmax - zmin);
+    camera.position.set(-(e.x1 - e.x0) * 0.9 - span * 0.3, -(e.y1 - e.y0) * 1.1 - span * 0.4, (gmax - O[2]) + span * 0.9);
+    controls.target.set(0, 0, (gmax - O[2]) * 0.45); camera.near = span / 500; camera.far = span * 50; camera.updateProjectionMatrix();
+    fitCamera = false;
+  }
+  buildResultScene();
+}
+
+function surfZ(Sf, x, y) {
+  const dx = Math.cos(Sf.theta), dy = Math.sin(Sf.theta);
+  const u = (x - Sf.C[0]) * dx + (y - Sf.C[1]) * dy, v = -(x - Sf.C[0]) * dy + (y - Sf.C[1]) * dx;
+  const Q = 1 - (u / Sf.R) ** 2 - (Sf.cyl || !isFinite(Sf.a) ? 0 : (v / Sf.a) ** 2);
+  return Q > 0 ? Sf.C[2] - (Sf.Rw || Sf.R) * Math.sqrt(Q) : Infinity;
+}
+
+function buildResultScene() {
+  if (!renderer) return;
+  clearGroup(resultGroup);
+  const ovF = $('ovFs'), ovL = $('ovLegend');
+  const r = result && view.method && result.results[view.method];
+  if (!r || !M) { ovF.hidden = true; ovL.hidden = true; applyXray(); return; }
+  const O = origin, Sf = r.surface;
+  // slip surface tiles
+  const key = view.colorBy;
+  const vals = r.columns.map(c => key === 'mat' ? c.mat : c[key]);
+  let lo = Infinity, hi = -Infinity; for (const v of vals) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  if (!(hi > lo)) hi = lo + 1;
+  const dx = Math.cos(Sf.theta), dy = Math.sin(Sf.theta), hu = r.du / 2, hv = r.dv / 2;
+  const pos = [], col = [];
+  r.columns.forEach((c, i) => {
+    const color = key === 'mat' ? matColor(c.mat) : rampColor((vals[i] - lo) / (hi - lo));
+    const corners = [[-hu, -hv], [hu, -hv], [hu, hv], [-hu, hv]].map(([a, b]) => {
+      const x = c.x + a * dx - b * dy, y = c.y + a * dy + b * dx;
+      let z = surfZ(Sf, x, y); if (!isFinite(z)) z = c.zb; z = Math.min(z, M.G(x, y));
+      return [x - O[0], y - O[1], z - O[2]];
+    });
+    for (const q of [corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]]) { pos.push(...q); col.push(color.r, color.g, color.b); }
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+  resultGroup.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  // sliding direction arrow
+  let cx = 0, cy = 0, cz = 0, wsum = 0;
+  for (const c of r.columns) { cx += c.x * c.weight; cy += c.y * c.weight; cz += c.zt * c.weight; wsum += c.weight; }
+  cx /= wsum; cy /= wsum; cz /= wsum;
+  const len = Math.max(r.du * 8, Sf.R * 0.6);
+  const arrow = new THREE.ArrowHelper(new THREE.Vector3(Math.cos(r.alpha), Math.sin(r.alpha), 0), new THREE.Vector3(cx - O[0] - Math.cos(r.alpha) * len / 2, cy - O[1] - Math.sin(r.alpha) * len / 2, cz - O[2] + len * 0.25), len, new THREE.Color(css('--accent')).getHex(), len * 0.25, len * 0.14);
+  resultGroup.add(arrow);
+  // trial surfaces as ground outlines
+  if (view.showTop && result.top && Sf && !Sf.cyl) {
+    const Fs = result.top.map(t => t.F), f0 = Math.min(...Fs), f1 = Math.max(...Fs);
+    for (const t of result.top) {
+      const T = t.surface; if (!T || T.cyl) continue;
+      const pts = [];
+      const tdx = Math.cos(T.theta), tdy = Math.sin(T.theta);
+      for (let k = 0; k <= 72; k++) {
+        const ph = k / 72 * 2 * Math.PI, cu = Math.cos(ph) * T.R, cv = Math.sin(ph) * T.a;
+        let a = 0, b = 1, found = false;
+        const at = rr => { const x = T.C[0] + rr * cu * tdx - rr * cv * tdy, y = T.C[1] + rr * cu * tdy + rr * cv * tdx; return [x, y, surfZ(T, x, y) - M.G(x, y)]; };
+        if (at(0)[2] < 0) { for (let it = 0; it < 22; it++) { const m = (a + b) / 2; if (at(m)[2] < 0) a = m; else b = m; } found = true; }
+        if (!found) continue;
+        const [x, y] = at(a); pts.push(new THREE.Vector3(x - O[0], y - O[1], M.G(x, y) - O[2] + 0.05));
+      }
+      if (pts.length < 3) continue;
+      const lg = new THREE.BufferGeometry().setFromPoints(pts);
+      const c = rampColor(1 - (t.F - f0) / Math.max(1e-9, f1 - f0));
+      resultGroup.add(new THREE.Line(lg, new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.7 })));
+    }
+  }
+  // overlays
+  const [cl, lab] = fsClass(r.F);
+  ovF.hidden = false;
+  ovF.innerHTML = `<span class="m">${METHOD_NAME[view.method]} 3D · ${result.cfg.type}</span><span class="v">FS ${fmt(r.F, 3)}</span><span class="pill ${cl}">${lab}</span>${stale ? '<span class="m" style="color:var(--warn)">out of date</span>' : ''}`;
+  if (key === 'mat') {
+    ovL.hidden = false;
+    const used = [...new Set(r.columns.map(c => c.mat))];
+    ovL.innerHTML = `<div class="t">Base material</div>` + used.map(i => `<div class="row" style="gap:6px;font-size:12px"><span style="width:12px;height:12px;border-radius:2px;background:${esc(project.materials[i] ? project.materials[i].color : '#999')}"></span>${esc(project.materials[i] ? project.materials[i].name : i)}</div>`).join('');
+  } else {
+    ovL.hidden = false;
+    ovL.innerHTML = `<div class="t">${DATA[key][0]}${DATA[key][1] ? ' · ' + DATA[key][1] : ''}</div><div class="ramp" style="background:linear-gradient(90deg,${RAMP.join(',')})"></div><div class="ends"><span>${fmt(lo, key === 'malpha' ? 2 : 0)}</span><span>${fmt(hi, key === 'malpha' ? 2 : 0)}</span></div>`;
+  }
+  applyXray();
+}
+function applyXray() {
+  if (!groundMat) return;
+  const on = !!(result && view.xray && tab === 'results');
+  groundMat.opacity = on ? 0.42 : 1; groundMat.depthWrite = !on; groundMat.needsUpdate = true;
+}
+
+/* ------------------------------------------------------------- 2D section */
+function drawSection() {
+  const cv = $('sectionCv'); if (!cv || !result || !M) return;
+  const r = result.results[view.method]; if (!r) return;
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const Sf = r.surface, e = MODEL.extent;
+  const dx = Math.cos(Sf.theta), dy = Math.sin(Sf.theta);
+  // section line through C, clipped to the extent
+  let s0 = -Infinity, s1 = Infinity;
+  for (const [p, d, a, b] of [[Sf.C[0], dx, e.x0, e.x1], [Sf.C[1], dy, e.y0, e.y1]]) {
+    if (Math.abs(d) < 1e-9) continue;
+    const t1 = (a - p) / d, t2 = (b - p) / d; s0 = Math.max(s0, Math.min(t1, t2)); s1 = Math.min(s1, Math.max(t1, t2));
+  }
+  if (!(s1 > s0)) return;
+  const n = 300, ss = [], prof = [];
+  for (let i = 0; i <= n; i++) {
+    const s = s0 + (s1 - s0) * i / n, x = Sf.C[0] + s * dx, y = Sf.C[1] + s * dy;
+    ss.push(s); prof.push({ x, y, g: M.G(x, y), L: M.layers.map(L => L.at(x, y)), w: M.W ? M.W(x, y) : null, z: surfZ(Sf, x, y) });
+  }
+  let zt = -Infinity, zb = zmin; for (const p of prof) zt = Math.max(zt, p.g, p.w == null ? -Infinity : p.w);
+  // equal scales
+  const pad = { l: 46, r: 12, t: 12, b: 26 };
+  const sx = (W - pad.l - pad.r) / (s1 - s0), sz = (H - pad.t - pad.b) / (zt - zb), k = Math.min(sx, sz);
+  const ox = pad.l + ((W - pad.l - pad.r) - k * (s1 - s0)) / 2, oz = H - pad.b;
+  const X = s => ox + (s - s0) * k, Z = z => oz - (z - zb) * k;
+  // zones
+  for (let zi = M.layers.length; zi >= 0; zi--) {
+    ctx.beginPath();
+    prof.forEach((p, i) => { const top = zi === 0 ? p.g : Math.min(p.g, p.L[zi - 1]); i ? ctx.lineTo(X(ss[i]), Z(top)) : ctx.moveTo(X(ss[i]), Z(top)); });
+    ctx.lineTo(X(s1), Z(zb)); ctx.lineTo(X(s0), Z(zb)); ctx.closePath();
+    ctx.fillStyle = (project.materials[M.zonesMat[zi]] || {}).color || '#999'; ctx.globalAlpha = 0.55; ctx.fill(); ctx.globalAlpha = 1;
+  }
+  // ground line
+  ctx.beginPath(); prof.forEach((p, i) => i ? ctx.lineTo(X(ss[i]), Z(p.g)) : ctx.moveTo(X(ss[i]), Z(p.g)));
+  ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.4; ctx.stroke();
+  // water
+  if (M.W) { ctx.beginPath(); prof.forEach((p, i) => i ? ctx.lineTo(X(ss[i]), Z(p.w)) : ctx.moveTo(X(ss[i]), Z(p.w))); ctx.setLineDash([6, 4]); ctx.strokeStyle = css('--water'); ctx.lineWidth = 1.4; ctx.stroke(); ctx.setLineDash([]); }
+  // slip surface and mass
+  ctx.beginPath(); let open = false;
+  prof.forEach((p, i) => { if (p.z < p.g) { open ? ctx.lineTo(X(ss[i]), Z(p.z)) : ctx.moveTo(X(ss[i]), Z(p.z)); open = true; } });
+  ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2.4; ctx.stroke();
+  // axes
+  ctx.fillStyle = css('--muted'); ctx.strokeStyle = css('--line'); ctx.lineWidth = 1; ctx.font = '11px ' + css('--f-data');
+  const step = niceStep((zt - zb) / 4);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let z = Math.ceil(zb / step) * step; z <= zt; z += step) { ctx.beginPath(); ctx.moveTo(ox - 4, Z(z)); ctx.lineTo(ox, Z(z)); ctx.stroke(); ctx.fillText(fmt(z, 0), ox - 6, Z(z)); }
+  const hs = niceStep((s1 - s0) / 5);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let s = Math.ceil(s0 / hs) * hs; s <= s1; s += hs) { ctx.beginPath(); ctx.moveTo(X(s), oz); ctx.lineTo(X(s), oz + 4); ctx.stroke(); ctx.fillText(fmt(s, 0), X(s), oz + 6); }
+  ctx.textAlign = 'left'; ctx.fillText(`distance along ${fmt(azFromAlpha(Sf.theta), 0)}° from slip centre, m`, ox, 2);
+}
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; }
+window.addEventListener('resize', () => { if (tab === 'results') drawSection(); });
+
+/* ------------------------------------------------------------- boot */
+if (!project.gridN) project.gridN = 150;
+renderTabs(); renderPanel();
+if (initGL()) { updateScene(); compute(); }
+})();
+</script>
+
+</body>
+</html>
